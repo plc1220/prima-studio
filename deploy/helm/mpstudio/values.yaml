@@ -1,0 +1,67 @@
+namespace: mpstudio
+
+imagePullPolicy: IfNotPresent
+
+images:
+  web: asia-southeast1-docker.pkg.dev/PROJECT/media-prima-video-studio/web:latest
+  api: asia-southeast1-docker.pkg.dev/PROJECT/media-prima-video-studio/api:latest
+  orchestrator: asia-southeast1-docker.pkg.dev/PROJECT/media-prima-video-studio/orchestrator:latest
+  metadataAgent: asia-southeast1-docker.pkg.dev/PROJECT/media-prima-video-studio/metadata-agent:latest
+  newsroomAgent: asia-southeast1-docker.pkg.dev/PROJECT/media-prima-video-studio/newsroom-agent:latest
+  renderAgent: asia-southeast1-docker.pkg.dev/PROJECT/media-prima-video-studio/render-agent:latest
+  shortgenAgent: asia-southeast1-docker.pkg.dev/PROJECT/media-prima-video-studio/shortgen-agent:latest
+
+gcp:
+  projectId: ""
+  region: asia-southeast1
+  serviceAccountEmail: ""
+  bucketName: ""
+
+runtime:
+  environment: production
+  databaseSecretName: mpstudio-database
+  databaseSecretKey: DATABASE_URL
+  appSecretName: mpstudio-runtime
+  appSecretKey: APP_SECRET
+  apiPublicBaseUrl: https://api.example.com
+  newsroomLiveSignals: "false"
+
+secretProvider:
+  enabled: true
+  className: mpstudio-secrets
+  secretName: mpstudio-runtime
+  secrets:
+    - name: mpstudio-runtime
+      version: latest
+
+ingress:
+  enabled: true
+  webHost: studio.example.com
+  apiHost: api.example.com
+  managedCertificateName: mpstudio-cert
+
+resources:
+  web:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+  api:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+  worker:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+  render:
+    requests:
+      cpu: "2"
+      memory: 6Gi
+  shortgen:
+    requests:
+      cpu: "2"
+      memory: 6Gi
+
+stateful:
+  storageClassName: standard-rwo
+  storageSize: 100Gi

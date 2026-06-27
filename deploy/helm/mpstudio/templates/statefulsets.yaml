@@ -1,0 +1,104 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: render-agent
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "mpstudio.labels" . | nindent 4 }}
+    app.kubernetes.io/component: render-agent
+spec:
+  serviceName: render-agent
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "mpstudio.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: render-agent
+  template:
+    metadata:
+      labels:
+        {{- include "mpstudio.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: render-agent
+    spec:
+      serviceAccountName: mpstudio
+      containers:
+        - name: render-agent
+          image: {{ .Values.images.renderAgent | quote }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          envFrom:
+            - configMapRef:
+                name: mpstudio-config
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.runtime.databaseSecretName }}
+                  key: {{ .Values.runtime.databaseSecretKey }}
+            - name: SCRATCH_ROOT
+              value: /scratch
+          volumeMounts:
+            - name: scratch
+              mountPath: /scratch
+          resources:
+            {{- toYaml .Values.resources.render | nindent 12 }}
+  volumeClaimTemplates:
+    - metadata:
+        name: scratch
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: {{ .Values.stateful.storageClassName | quote }}
+        resources:
+          requests:
+            storage: {{ .Values.stateful.storageSize | quote }}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: shortgen-agent
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "mpstudio.labels" . | nindent 4 }}
+    app.kubernetes.io/component: shortgen-agent
+spec:
+  serviceName: shortgen-agent
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "mpstudio.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: shortgen-agent
+  template:
+    metadata:
+      labels:
+        {{- include "mpstudio.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: shortgen-agent
+    spec:
+      serviceAccountName: mpstudio
+      containers:
+        - name: shortgen-agent
+          image: {{ .Values.images.shortgenAgent | quote }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          envFrom:
+            - configMapRef:
+                name: mpstudio-config
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.runtime.databaseSecretName }}
+                  key: {{ .Values.runtime.databaseSecretKey }}
+            - name: SCRATCH_ROOT
+              value: /scratch
+          volumeMounts:
+            - name: scratch
+              mountPath: /scratch
+          resources:
+            {{- toYaml .Values.resources.shortgen | nindent 12 }}
+  volumeClaimTemplates:
+    - metadata:
+        name: scratch
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: {{ .Values.stateful.storageClassName | quote }}
+        resources:
+          requests:
+            storage: {{ .Values.stateful.storageSize | quote }}
+

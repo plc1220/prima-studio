@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mpstudio-config
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "mpstudio.labels" . | nindent 4 }}
+data:
+  ENVIRONMENT: {{ .Values.runtime.environment | quote }}
+  GCP_PROJECT_ID: {{ .Values.gcp.projectId | quote }}
+  GCP_REGION: {{ .Values.gcp.region | quote }}
+  GCS_BUCKET_NAME: {{ .Values.gcp.bucketName | quote }}
+  PUBLIC_BASE_URL: {{ .Values.runtime.apiPublicBaseUrl | quote }}
+  LOCAL_STORAGE_ROOT: "/data/storage"
+  NEWSROOM_LIVE_SIGNALS: {{ .Values.runtime.newsroomLiveSignals | quote }}

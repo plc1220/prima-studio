@@ -6,9 +6,9 @@ from uuid import UUID
 from mpstudio.contracts import AssetKind, AgentTaskKind, AgentTaskPayload, EventPayload, JobStatus, StepName
 from mpstudio.database import session_scope
 from mpstudio.media import create_demo_mp4, render_timeline_mp4
-from mpstudio.moneyprinter import build_moneyprinter_plan
 from mpstudio.repository import append_output_asset, create_asset, record_event, set_job_status
 from mpstudio.settings import get_settings
+from mpstudio.shorts_planner import build_shorts_plan
 from mpstudio.storage import StorageClient
 from mpstudio.transcoder import TranscoderRenderer, output_directory_for
 from mpstudio.worker import run_worker
@@ -28,7 +28,7 @@ def handle_shortgen(payload: AgentTaskPayload) -> None:
     script_override = payload.params.get("script")
     search_terms_override = payload.params.get("search_terms")
 
-    plan = build_moneyprinter_plan(
+    plan = build_shorts_plan(
         workspace_id=payload.workspace_id,
         job_id=str(payload.job_id),
         prompt=prompt,
@@ -49,7 +49,7 @@ def handle_shortgen(payload: AgentTaskPayload) -> None:
         "timeline": [clip.__dict__ for clip in plan.timeline],
         "source": "Newsroom Generator handoff"
         if payload.params.get("source_newsroom_job_id")
-        else "MoneyPrinterTurbo-style planner",
+        else "Prima Studio shorts planner",
         "source_newsroom_job_id": payload.params.get("source_newsroom_job_id"),
         "source_topic_id": payload.params.get("source_topic_id", ""),
         "source_angle_id": payload.params.get("source_angle_id", ""),

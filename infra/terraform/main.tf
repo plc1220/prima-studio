@@ -20,7 +20,7 @@ resource "google_project_service" "services" {
 resource "google_artifact_registry_repository" "repo" {
   location      = var.region
   repository_id = var.artifact_registry_repo
-  description   = "Container images for Media Prima AI Video Studio"
+  description   = "Container images for Prima Studio"
   format        = "DOCKER"
 
   depends_on = [google_project_service.services]
@@ -44,7 +44,7 @@ resource "google_storage_bucket" "media" {
 
 resource "google_service_account" "workload" {
   account_id   = "mp-video-studio"
-  display_name = "Media Prima AI Video Studio workload identity"
+  display_name = "Prima Studio workload identity"
 }
 
 resource "google_project_iam_member" "vertex_user" {

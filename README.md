@@ -1,16 +1,16 @@
-# Media Prima AI Video Studio
+# Prima Studio
 
 Product scaffold for a local-first AI video workflow demo that can still grow into GKE later. It replaces the old Streamlit demo shape with a proper frontend, API gateway, orchestrator, agent services, managed state, and render/cache-heavy workers.
 
 ## What It Includes
 
-- `apps/web`: Next.js + TypeScript frontend with isolated Newsroom Generator, Video Clipping, and MoneyPrinter-style Shorts lanes.
+- `apps/web`: Next.js + TypeScript frontend with isolated Newsroom Generator, Video Clipping, and Shorts Generator lanes.
 - `services/api`: FastAPI gateway exposing the planned public API.
 - `services/orchestrator`: stateless workflow coordinator that advances jobs into agent tasks.
 - `services/agents/newsroom`: editorial intelligence agent that turns broad briefs into ranked topic cards, angles, scripts, captions, scene plans, and shorts handoff packages.
 - `services/agents/metadata`: Gemini/GCS metadata analysis agent with deterministic local fallback.
 - `services/agents/render`: FFmpeg render agent designed as a GKE StatefulSet with PVC scratch.
-- `services/agents/shortgen`: MoneyPrinterTurbo-style short generation agent designed as a GKE StatefulSet with persistent cache.
+- `services/agents/shortgen`: short generation agent designed as a GKE StatefulSet with persistent cache.
 - `packages/python/mpstudio`: shared contracts, SQLAlchemy models, local queue/event adapters, and storage helpers.
 - `infra/terraform`: GCP/GKE Autopilot infrastructure scaffold.
 - `deploy/helm/mpstudio`: Helm chart for Deployments, StatefulSets, services, ingress, and secret mounts.
@@ -35,7 +35,7 @@ Default local workspaces are intentionally isolated:
 
 - `media-prima-video-clipping` for uploaded owned footage, clip metadata, clips, and final video-clipping outputs.
 - `media-prima-shorts` for prompt-to-short jobs and generated shorts.
-- `media-prima-newsroom` for research slates, approved angles, scripts, captions, scene plans, and MoneyPrinter handoff packages.
+- `media-prima-newsroom` for research slates, approved angles, scripts, captions, scene plans, and Shorts Generator handoff packages.
 
 Generated assets are visible in the UI:
 
@@ -44,9 +44,9 @@ Generated assets are visible in the UI:
 - Generated shorts: open the Shorts page and check the `Generated shorts` section.
 - Local files: `./local-data/storage/<workspace>/outputs/...`
 
-MoneyPrinter-style shorts are not limited to generated-video models. The flow plans a script, asks Gemini for stock-video search terms, searches the configured stock provider, downloads selected clips, builds a timeline, and renders the MP4. Set `PEXELS_API_KEYS` or `PIXABAY_API_KEYS` plus `STOCK_VIDEO_SOURCE=pexels` or `pixabay` to enable real stock search; without keys, the local demo falls back to a generated placeholder MP4 so the render/review flow still works.
+Prima Studio shorts are not limited to generated-video models. The flow plans a script, asks Gemini for stock-video search terms, searches the configured stock provider, downloads selected clips, builds a timeline, and renders the MP4. Set `PEXELS_API_KEYS` or `PIXABAY_API_KEYS` plus `STOCK_VIDEO_SOURCE=pexels` or `pixabay` to enable real stock search; without keys, the local demo falls back to a generated placeholder MP4 so the render/review flow still works.
 
-Newsroom Generator sits upstream of MoneyPrinter. It accepts a broad brief, ranks topic cards with evidence signals, generates possible angles and complete narrative packages, then hands the selected prompt, approved script, and search terms into the Shorts workflow. Set `NEWSROOM_LIVE_SIGNALS=true` to let the newsroom agent attempt a lightweight GDELT public-news signal scan; when disabled or unavailable, it produces a deterministic local research slate with explicit search/social/editorial validation cues.
+Newsroom Generator sits upstream of the Shorts Generator. It accepts a broad brief, ranks topic cards with evidence signals, generates possible angles and complete narrative packages, then hands the selected prompt, approved script, and search terms into the Shorts workflow. Set `NEWSROOM_LIVE_SIGNALS=true` to let the newsroom agent attempt a lightweight GDELT public-news signal scan; when disabled or unavailable, it produces a deterministic local research slate with explicit search/social/editorial validation cues.
 
 For local secrets, copy `.env.example` to `.env` and put provider keys there. `.env` is git-ignored. For GCP, put the same values in Secret Manager and inject them into Cloud Run/GKE as secrets rather than plain image config.
 

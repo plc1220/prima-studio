@@ -51,7 +51,7 @@ from mpstudio.settings import get_settings
 from mpstudio.storage import StorageClient, parse_gcs_uri
 
 app = FastAPI(
-    title="Media Prima AI Video Studio API",
+    title="Prima Studio API",
     version="0.1.0",
     description="Workflow API for video clipping and generating new social shorts.",
 )

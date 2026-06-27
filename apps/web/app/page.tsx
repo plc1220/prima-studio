@@ -6,7 +6,7 @@ export default function DashboardPage() {
     <>
       <section className="topbar">
         <div>
-          <div className="eyebrow">Media Prima AI Video Studio</div>
+          <div className="eyebrow">Prima Studio</div>
           <h1>GenAI production lanes for newsroom intelligence, owned footage, and social shorts</h1>
           <p className="muted">
             A reviewable workspace for sensing audience temperature, packaging editorial ideas, repurposing long-form video, and rendering

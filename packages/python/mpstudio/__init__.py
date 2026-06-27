@@ -1,4 +1,4 @@
-"""Shared package for Media Prima AI Video Studio services."""
+"""Shared package for Prima Studio services."""
 
 from .contracts import WorkflowKind
 

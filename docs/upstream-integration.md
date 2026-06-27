@@ -12,8 +12,8 @@ final render assembly.
 The Newsroom Generator is an upstream layer built for this app. It produces a JSON
 editorial package containing ranked topic cards, signal evidence, candidate angles,
 voiceover script, scene plan, captions, hashtags, stock search terms, and a structured
-handoff into the MoneyPrinter-style `shorts` workflow. When a newsroom package is sent
-to MoneyPrinter, the approved script and search terms are passed through rather than
+handoff into the Prima Studio `shorts` workflow. When a newsroom package is sent
+to the Shorts Generator, the approved script and search terms are passed through rather than
 rewritten from a blank prompt.
 
 The `revmed-vid-clip` repo did not include a license file at audit time. To avoid

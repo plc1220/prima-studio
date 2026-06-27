@@ -5,7 +5,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    app_name: str = "Media Prima AI Video Studio"
+    app_name: str = "Prima Studio"
     environment: str = "local"
     database_url: str = "sqlite:///./local-data/mpstudio.db"
     local_storage_root: str = "./local-data/storage"
@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     scratch_root: str = "/tmp/mpstudio"
 
     gemini_model_name: str = "gemini-2.5-flash"
-    moneyprinter_image: str = "ghcr.io/harry0703/moneyprinterturbo:latest"
+    shortgen_image: str = "ghcr.io/harry0703/moneyprinterturbo:latest"
     stock_video_source: str = "pexels"
     pexels_api_keys: str = ""
     pixabay_api_keys: str = ""

@@ -5,10 +5,10 @@
 - `apps/web` is the product frontend. It is not a Streamlit wrapper.
 - `services/api` owns public HTTP contracts, job creation, signed URLs, and job reads.
 - `services/orchestrator` converts workflow jobs into agent tasks.
-- `services/agents/newsroom` handles upstream editorial intelligence: topic discovery, ranked cards, angle generation, narrative packages, and MoneyPrinter handoff metadata.
+- `services/agents/newsroom` handles upstream editorial intelligence: topic discovery, ranked cards, angle generation, narrative packages, and Shorts Generator handoff metadata.
 - `services/agents/metadata` handles Rev-Med-style Gemini analysis of owned media.
 - `services/agents/render` handles FFmpeg-heavy clipping/joining and runs as a StatefulSet.
-- `services/agents/shortgen` handles MoneyPrinterTurbo-style prompt-to-video generation and runs as a StatefulSet.
+- `services/agents/shortgen` handles prompt-to-video generation and runs as a StatefulSet.
 
 ## Local Runtime
 
@@ -28,5 +28,5 @@ GKE should run the same service images with managed GCP state:
 
 - Rev-Med video split, metadata generation, clip generation, and join concepts map to the `video-clipping` workflow.
 - Editorial discovery, convergence, scripting, captions, search terms, and daily/campaign slates map to the `newsroom` workflow.
-- MoneyPrinterTurbo prompt/script/terms/TTS/subtitle/render concepts map to the `shorts` workflow.
+- Prompt/script/terms/TTS/subtitle/render concepts map to the `shorts` workflow.
 - Face refinement is intentionally deferred to a v2 agent.

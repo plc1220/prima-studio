@@ -1,4 +1,4 @@
-# Media Prima AI Video Studio Feature And Video Clipping Flow Spec
+# Prima Studio Feature And Video Clipping Flow Spec
 
 Date: 2026-06-24  
 Status: Draft for review before implementation  
@@ -6,7 +6,7 @@ Scope: Product story, feature map, video clipping user flow, UI direction, and b
 
 ## Executive Summary
 
-The product name should remain **Media Prima AI Video Studio**. The earlier `ClipForge Studio` naming direction is dropped.
+The product name should remain **Prima Studio**. The earlier `ClipForge Studio` naming direction is dropped.
 
 The main problem with the current video clipping implementation is still the same: it compresses the upstream `revmed-vid-clip` workflow into one generic form and one `/workflows/video-clipping` job. The upstream mental model is not "upload and run one opaque clipping flow"; it is a visible production pipeline:
 
@@ -16,7 +16,7 @@ The main problem with the current video clipping implementation is still the sam
 4. Join selected clips into a final video.
 5. Optionally let AI propose a clip plan from metadata, then approve and render it.
 
-This spec also expands the story beyond video clipping. Media Prima AI Video Studio should be understood as three connected production lanes:
+This spec also expands the story beyond video clipping. Prima Studio should be understood as three connected production lanes:
 
 - **Newsroom**: finds stories, angles, scripts, captions, and scene plans.
 - **Video Clipping**: turns owned long-form footage into reviewable clips and final edits.
@@ -28,7 +28,7 @@ These decisions replace the open questions from the prior draft.
 
 | Decision | Recommendation |
 | --- | --- |
-| Product name | Keep **Media Prima AI Video Studio**. Do not rename the whole product to ClipForge or MoneyPrinterTurbo. |
+| Product name | Keep **Prima Studio**. Do not rename the whole product to ClipForge or any upstream project name. |
 | Video clipping lane name | Keep **Video Clipping** in nav and page titles. |
 | Cast/face refinement | Drop it from the primary flow. Keep Tab 3 as manual Clip Generation. Revisit face/cast matching later only if we implement a better algorithm with reliable embeddings, reference management, confidence thresholds, and human confirmation. |
 | Processing backend | Use **Google Cloud Transcoder only** for real split, clip, and join processing. Tests can mock jobs and use fixtures, but user-visible processing should not silently fall back to fake local MP4s. |
@@ -75,7 +75,7 @@ These GPT-image drafts are intentionally simple and page-level. They are not fin
 
 ## Product Story
 
-Media Prima AI Video Studio is an internal production workspace for making social video assets from two kinds of inputs:
+Prima Studio is an internal production workspace for making social video assets from two kinds of inputs:
 
 - **Owned editorial or entertainment footage**, handled by Video Clipping.
 - **Editorial ideas or prompts**, handled by Newsroom and Shorts Generator.
@@ -248,8 +248,8 @@ Outputs:
 
 Product behavior:
 
-- Do not mention MoneyPrinterTurbo in user-facing UI.
-- The lane can remain inspired by MoneyPrinterTurbo's workflow, but the product language should be Media Prima's.
+- Do not mention upstream implementation project names in user-facing UI.
+- The lane can remain inspired by proven prompt-to-short workflows, but the product language should be Prima Studio's.
 - When launched from Newsroom, preserve the approved editorial package.
 - When launched directly, generate the script and media plan from the user's prompt.
 
@@ -472,7 +472,7 @@ The upstream project has separate Streamlit pages and backend endpoints for each
 - `frontend/pages/3_clips_generation.py` lists metadata files, previews metadata tables, and calls `POST /generate-clips/`.
 - `frontend/pages/5_video_joining.py` lists generated clips, lets users select/order clips, and calls `POST /join-videos/`.
 - `frontend/pages/4_refine_clips.py` adds optional cast/face refinement, but this should not be part of the first Media Prima primary flow.
-- `frontend/pages/6_final_result.py` is an output gallery; in Media Prima AI Video Studio this should be folded into Tab 4 outputs and Job Detail.
+- `frontend/pages/6_final_result.py` is an output gallery; in Prima Studio this should be folded into Tab 4 outputs and Job Detail.
 
 Important behavior to preserve:
 
@@ -551,7 +551,7 @@ Recommended job event steps:
 ## UI Requirements
 
 - The app must open into usable work surfaces, not marketing pages.
-- Keep the product name as **Media Prima AI Video Studio**.
+- Keep the product name as **Prima Studio**.
 - Use compact production UI: small labels, dense tables, clear borders, limited red primary actions.
 - Keep tabs real and navigable.
 - Show input artifacts and output artifacts on every workflow page.
@@ -571,7 +571,7 @@ Recommended job event steps:
 
 ## Implementation Sequence
 
-1. Rename user-facing copy away from MoneyPrinterTurbo while keeping Media Prima AI Video Studio as the product name.
+1. Keep user-facing copy on Prima Studio and Shorts Generator language.
 2. Add asset listing filters by kind to the API.
 3. Add Transcoder split stage and segment asset persistence.
 4. Split `VideoClippingForm` into real tabbed workflow components.

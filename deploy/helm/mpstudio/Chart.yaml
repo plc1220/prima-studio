@@ -1,6 +1,6 @@
 apiVersion: v2
 name: mpstudio
-description: Media Prima AI Video Studio GKE deployment chart
+description: Prima Studio GKE deployment chart
 type: application
 version: 0.1.0
 appVersion: "0.1.0"

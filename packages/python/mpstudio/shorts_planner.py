@@ -17,7 +17,7 @@ class StockVideo:
 
 
 @dataclass(frozen=True)
-class MoneyPrinterPlan:
+class ShortsPlan:
     prompt: str
     language: str
     script: str
@@ -32,7 +32,7 @@ class MoneyPrinterPlan:
         return json.dumps(data, indent=2)
 
 
-def build_moneyprinter_plan(
+def build_shorts_plan(
     *,
     workspace_id: str,
     job_id: str,
@@ -43,7 +43,7 @@ def build_moneyprinter_plan(
     output_prefix: str,
     script: str | None = None,
     search_terms: list[str] | None = None,
-) -> MoneyPrinterPlan:
+) -> ShortsPlan:
     final_script = script.strip() if script and script.strip() else generate_script_with_vertex(prompt, language)
     terms = _clean_terms(search_terms) or generate_search_terms_with_vertex(prompt, final_script, language)
     stock_videos = search_stock_videos(terms, aspect_ratio=aspect_ratio, minimum_duration=4)
@@ -54,7 +54,7 @@ def build_moneyprinter_plan(
         videos=stock_videos[: max(1, min(6, len(stock_videos)))],
     )
     timeline = build_timeline(stock_asset_uris, duration_seconds=duration_seconds)
-    return MoneyPrinterPlan(
+    return ShortsPlan(
         prompt=prompt,
         language=language,
         script=final_script,
@@ -156,7 +156,7 @@ def download_and_store_stock_videos(
 
     settings = get_settings()
     storage = StorageClient()
-    scratch = Path(settings.scratch_root) / "moneyprinter" / job_id / "stock"
+    scratch = Path(settings.scratch_root) / "shorts-planner" / job_id / "stock"
     scratch.mkdir(parents=True, exist_ok=True)
     uris: list[str] = []
     for index, video in enumerate(videos, start=1):

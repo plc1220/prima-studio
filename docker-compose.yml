@@ -1,0 +1,110 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: services/api/Dockerfile
+    environment:
+      DATABASE_URL: sqlite:////data/mpstudio.db
+      LOCAL_STORAGE_ROOT: /data/storage
+      PUBLIC_BASE_URL: http://localhost:8080
+      TASK_POLL_INTERVAL_SECONDS: 8
+      STOCK_VIDEO_SOURCE: ${STOCK_VIDEO_SOURCE:-pexels}
+      PEXELS_API_KEYS: ${PEXELS_API_KEYS:-}
+      PIXABAY_API_KEYS: ${PIXABAY_API_KEYS:-}
+      NEWSROOM_LIVE_SIGNALS: ${NEWSROOM_LIVE_SIGNALS:-false}
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./local-data:/data
+
+  orchestrator:
+    build:
+      context: .
+      dockerfile: services/orchestrator/Dockerfile
+    environment:
+      DATABASE_URL: sqlite:////data/mpstudio.db
+      LOCAL_STORAGE_ROOT: /data/storage
+      TASK_POLL_INTERVAL_SECONDS: 8
+      STOCK_VIDEO_SOURCE: ${STOCK_VIDEO_SOURCE:-pexels}
+      PEXELS_API_KEYS: ${PEXELS_API_KEYS:-}
+      PIXABAY_API_KEYS: ${PIXABAY_API_KEYS:-}
+    volumes:
+      - ./local-data:/data
+    depends_on:
+      - api
+
+  metadata-agent:
+    build:
+      context: .
+      dockerfile: services/agents/metadata/Dockerfile
+    environment:
+      DATABASE_URL: sqlite:////data/mpstudio.db
+      LOCAL_STORAGE_ROOT: /data/storage
+      TASK_POLL_INTERVAL_SECONDS: 8
+      STOCK_VIDEO_SOURCE: ${STOCK_VIDEO_SOURCE:-pexels}
+      PEXELS_API_KEYS: ${PEXELS_API_KEYS:-}
+      PIXABAY_API_KEYS: ${PIXABAY_API_KEYS:-}
+    volumes:
+      - ./local-data:/data
+    depends_on:
+      - api
+
+  newsroom-agent:
+    build:
+      context: .
+      dockerfile: services/agents/newsroom/Dockerfile
+    environment:
+      DATABASE_URL: sqlite:////data/mpstudio.db
+      LOCAL_STORAGE_ROOT: /data/storage
+      TASK_POLL_INTERVAL_SECONDS: 8
+      NEWSROOM_LIVE_SIGNALS: ${NEWSROOM_LIVE_SIGNALS:-false}
+    volumes:
+      - ./local-data:/data
+    depends_on:
+      - api
+
+  render-agent:
+    build:
+      context: .
+      dockerfile: services/agents/render/Dockerfile
+    environment:
+      DATABASE_URL: sqlite:////data/mpstudio.db
+      LOCAL_STORAGE_ROOT: /data/storage
+      SCRATCH_ROOT: /scratch
+      TASK_POLL_INTERVAL_SECONDS: 8
+      STOCK_VIDEO_SOURCE: ${STOCK_VIDEO_SOURCE:-pexels}
+      PEXELS_API_KEYS: ${PEXELS_API_KEYS:-}
+      PIXABAY_API_KEYS: ${PIXABAY_API_KEYS:-}
+    volumes:
+      - ./local-data:/data
+      - ./local-data/render-scratch:/scratch
+    depends_on:
+      - api
+
+  shortgen-agent:
+    build:
+      context: .
+      dockerfile: services/agents/shortgen/Dockerfile
+    environment:
+      DATABASE_URL: sqlite:////data/mpstudio.db
+      LOCAL_STORAGE_ROOT: /data/storage
+      SCRATCH_ROOT: /scratch
+      TASK_POLL_INTERVAL_SECONDS: 8
+      STOCK_VIDEO_SOURCE: ${STOCK_VIDEO_SOURCE:-pexels}
+      PEXELS_API_KEYS: ${PEXELS_API_KEYS:-}
+      PIXABAY_API_KEYS: ${PIXABAY_API_KEYS:-}
+    volumes:
+      - ./local-data:/data
+      - ./local-data/shortgen-cache:/scratch
+    depends_on:
+      - api
+
+  web:
+    build:
+      context: apps/web
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:8080
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api

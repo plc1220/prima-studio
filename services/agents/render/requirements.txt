@@ -1,0 +1,2 @@
+google-cloud-video-transcoder>=1.13,<2
+# Runtime dependencies come from the shared mpstudio package.

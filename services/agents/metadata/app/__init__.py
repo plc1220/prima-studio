@@ -1,0 +1,2 @@
+"""Metadata agent app package."""
+

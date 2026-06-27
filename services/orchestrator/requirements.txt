@@ -1,0 +1,1 @@
+# Runtime dependencies come from the shared mpstudio package.

@@ -1,0 +1,4 @@
+google-genai>=1.31,<2
+google-cloud-video-transcoder>=1.13,<2
+requests>=2.31,<3
+# Runtime dependencies come from the shared mpstudio package.

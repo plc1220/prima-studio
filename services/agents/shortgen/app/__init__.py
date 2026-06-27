@@ -1,0 +1,2 @@
+"""Shortgen agent app package."""
+

@@ -149,6 +149,13 @@ textarea {
   box-shadow: 0 1px 0 var(--line);
 }
 
+.workspace-topbar {
+  background: transparent;
+  border-left: 0;
+  padding: 0;
+  box-shadow: none;
+}
+
 .eyebrow {
   color: var(--brand-strong);
   font-size: 13px;
@@ -442,6 +449,10 @@ h2 {
   align-items: center;
 }
 
+.lane-toolbar {
+  grid-template-columns: minmax(240px, 1fr) repeat(3, minmax(260px, 1fr));
+}
+
 .search-field,
 .quick-open {
   min-height: 44px;
@@ -469,6 +480,26 @@ h2 {
 
 .quick-open {
   padding-right: 0;
+}
+
+.quick-open .button {
+  min-height: 44px;
+  white-space: nowrap;
+  align-self: stretch;
+}
+
+.quick-open-button {
+  flex: 0 0 auto;
+}
+
+.workspace-search {
+  display: grid;
+  grid-template-columns: minmax(260px, 560px);
+}
+
+.workspace-list {
+  display: grid;
+  border-top: 1px solid var(--line);
 }
 
 .stepper {
@@ -1019,6 +1050,10 @@ h2 {
   align-items: start;
 }
 
+.tagged-workspace-row {
+  grid-template-columns: minmax(280px, 1.2fr) minmax(220px, 0.7fr) auto;
+}
+
 .workspace-main,
 .job-kind {
   display: flex;
@@ -1030,6 +1065,51 @@ h2 {
 .workspace-main h2,
 .output-item h3 {
   word-break: break-word;
+}
+
+.workspace-title-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.workspace-tag {
+  border: 1px solid var(--line);
+  background: var(--panel-soft);
+  color: var(--ink);
+  padding: 4px 7px;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.workspace-tag.untagged {
+  color: var(--muted);
+  background: #fff;
+}
+
+.tag-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.tag-actions button {
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--ink);
+  padding: 6px 8px;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.tag-actions button:hover {
+  border-color: var(--brand);
+  color: var(--brand);
+  background: #fff5f5;
 }
 
 .mini-jobs {

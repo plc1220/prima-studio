@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import { Film, Home, Layers, Newspaper, WandSparkles } from "lucide-react";
+import { Film, Layers, Newspaper, WandSparkles } from "lucide-react";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -15,16 +15,13 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <body>
         <div className="shell">
           <header className="site-header">
-            <Link href="/" className="brand" aria-label="Prima Studio home">
+            <Link href="/workspaces" className="brand" aria-label="Prima Studio home">
               <Image src="/brand/media-prima-logo.png" alt="Media Prima" width={153} height={72} priority />
               <span className="brand-lockup">
                 <span className="brand-title">Prima Studio</span>
               </span>
             </Link>
             <nav className="nav" aria-label="Primary navigation">
-              <Link href="/">
-                <Home size={18} /> Dashboard
-              </Link>
               <Link href="/workspaces">
                 <Layers size={18} /> Workspaces
               </Link>

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import { Film, Layers, Newspaper, WandSparkles } from "lucide-react";
+import { Layers } from "lucide-react";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -24,15 +24,6 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             <nav className="nav" aria-label="Primary navigation">
               <Link href="/workspaces">
                 <Layers size={18} /> Workspaces
-              </Link>
-              <Link href="/newsroom">
-                <Newspaper size={18} /> Newsroom
-              </Link>
-              <Link href="/video-clipping">
-                <Film size={18} /> Video Clipping
-              </Link>
-              <Link href="/shorts">
-                <WandSparkles size={18} /> Shorts Generator
               </Link>
             </nav>
             <div className="api-pill">

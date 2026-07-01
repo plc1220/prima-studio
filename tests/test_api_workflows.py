@@ -82,6 +82,37 @@ def test_workspaces_are_filtered_by_lane(monkeypatch, tmp_path) -> None:
         assert [row["id"] for row in shorts_rows.json()] == ["daily-social"]
 
 
+def test_delete_workspace_removes_workspace_rows(monkeypatch, tmp_path) -> None:
+    app = _fresh_app(monkeypatch, tmp_path)
+    with TestClient(app) as client:
+        workflow = client.post(
+            "/workflows/shorts",
+            json={
+                "workspace_id": "daily-social",
+                "prompt": "Generate a short for cleanup.",
+                "language": "ms-MY",
+                "aspect_ratio": "9:16",
+            },
+        )
+        assert workflow.status_code == 200
+        job_id = workflow.json()["job_id"]
+
+        removed = client.delete("/workspaces/daily-social")
+        assert removed.status_code == 200
+        assert removed.json()["jobs"] == 1
+        assert removed.json()["tasks"] == 1
+
+        rows = client.get("/workspaces")
+        assert rows.status_code == 200
+        assert rows.json() == []
+
+        detail = client.get(f"/jobs/{job_id}")
+        assert detail.status_code == 404
+
+        missing = client.delete("/workspaces/daily-social")
+        assert missing.status_code == 404
+
+
 def test_asset_content_supports_head_and_range(monkeypatch, tmp_path) -> None:
     app = _fresh_app(monkeypatch, tmp_path)
     with TestClient(app) as client:
@@ -288,13 +319,15 @@ def test_local_shorts_flow_completes(monkeypatch, tmp_path) -> None:
         payload = AgentTaskPayload.model_validate(task.payload)
         complete_task(session, task)
     handle_shortgen(payload)
+    handle_shortgen(payload)
 
     with TestClient(app) as client:
         detail = client.get(f"/jobs/{job_id}")
         assert detail.status_code == 200
         payload = detail.json()
         assert payload["status"] == "succeeded"
-        assert any(output["kind"] == "generated_short" for output in payload["outputs"])
+        generated_outputs = [output for output in payload["outputs"] if output["kind"] == "generated_short"]
+        assert len(generated_outputs) == 1
 
 
 def test_shorts_flow_preserves_newsroom_handoff_script(monkeypatch, tmp_path) -> None:

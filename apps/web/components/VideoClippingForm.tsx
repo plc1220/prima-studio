@@ -56,8 +56,6 @@ const artifactKinds = [
 export function VideoClippingForm() {
   const params = useSearchParams();
   const [workspaceId, setWorkspaceId] = useState(params.get("workspace") || defaultWorkspaceId);
-  const [workspaceQuery, setWorkspaceQuery] = useState(params.get("workspace") || defaultWorkspaceId);
-  const [workspaces, setWorkspaces] = useState<WorkspaceRecord[]>([]);
   const [assetQuery, setAssetQuery] = useState("");
   const [assets, setAssets] = useState<AssetRecord[]>([]);
   const [jobs, setJobs] = useState<JobRecord[]>([]);
@@ -91,15 +89,7 @@ export function VideoClippingForm() {
     }
   }
 
-  async function refreshWorkspaces() {
-    try {
-      setWorkspaces(await apiFetch<WorkspaceRecord[]>(`/workspaces?lane=${lane}`));
-    } catch {
-      setWorkspaces([]);
-    }
-  }
-
-  async function ensureSelectedWorkspace(nextWorkspace = workspaceQuery) {
+  async function ensureSelectedWorkspace(nextWorkspace = workspaceId) {
     const trimmed = nextWorkspace.trim();
     if (!trimmed) throw new Error("Workspace is required");
     await apiFetch<WorkspaceRecord>("/workspaces", {
@@ -107,35 +97,12 @@ export function VideoClippingForm() {
       body: JSON.stringify({ workspace_id: trimmed, lane })
     });
     setWorkspaceId(trimmed);
-    setWorkspaceQuery(trimmed);
     return trimmed;
-  }
-
-  async function useWorkspace(nextWorkspace = workspaceQuery) {
-    setBusy(true);
-    setMessage("");
-    try {
-      const selected = await ensureSelectedWorkspace(nextWorkspace);
-      await Promise.all([refreshWorkspace(selected), refreshWorkspaces()]);
-      setMessage(`Using workspace ${selected}`);
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Unable to create workspace");
-    } finally {
-      setBusy(false);
-    }
   }
 
   useEffect(() => {
     refreshWorkspace();
-    refreshWorkspaces();
   }, []);
-
-  const filteredWorkspaces = useMemo(() => {
-    const needle = workspaceQuery.trim().toLowerCase();
-    return workspaces
-      .filter((workspace) => !needle || workspace.id.toLowerCase().includes(needle))
-      .slice(0, 8);
-  }, [workspaceQuery, workspaces]);
 
   const assetsByKind = useMemo(() => {
     return assets.reduce<Record<string, AssetRecord[]>>((groups, asset) => {
@@ -185,7 +152,7 @@ export function VideoClippingForm() {
       }
       setAssetId(response.asset_id);
       setFilename(uploadFilename);
-      await Promise.all([refreshWorkspace(selectedWorkspace), refreshWorkspaces()]);
+      await refreshWorkspace(selectedWorkspace);
       setMessage(file ? `Uploaded ${uploadFilename}.` : `Registered source asset ${response.asset_id}.`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Failed to register asset");
@@ -211,7 +178,8 @@ export function VideoClippingForm() {
           prompt
         })
       });
-      window.location.assign(`/jobs/${response.job_id}`);
+      await refreshWorkspace(selectedWorkspace);
+      setMessage(`Video-clipping job queued: ${response.job_id}`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Failed to start workflow");
     } finally {
@@ -235,7 +203,7 @@ export function VideoClippingForm() {
     }
   }
 
-  async function syncBucketWorkspace(nextWorkspace = workspaceQuery) {
+  async function syncBucketWorkspace(nextWorkspace = workspaceId) {
     setBucketBusy(true);
     setBucketMessage("");
     try {
@@ -248,6 +216,7 @@ export function VideoClippingForm() {
         })
       });
       await refreshWorkspace(selectedWorkspace);
+      setWorkspaceId(selectedWorkspace);
       setBucketMessage(
         `Synced ${response.workspace_id}: ${response.imported} imported, ${response.updated} updated, ${response.skipped} skipped.`
       );
@@ -272,6 +241,8 @@ export function VideoClippingForm() {
           <RefreshCw size={18} />
         </button>
       </section>
+
+      <WorkspaceContext workspaceId={workspaceId} />
 
       <section className="workflow-tabs" role="tablist" aria-label="Video clipping stages">
         {clipTabs.map((tab, index) => (
@@ -311,7 +282,7 @@ export function VideoClippingForm() {
               <button className="button secondary" type="button" onClick={loadBucketWorkspaces} disabled={bucketBusy || !bucketName.trim()}>
                 Inspect
               </button>
-              <button className="button secondary" type="button" onClick={() => syncBucketWorkspace()} disabled={bucketBusy || !bucketName.trim() || !workspaceQuery.trim()}>
+              <button className="button secondary" type="button" onClick={() => syncBucketWorkspace()} disabled={bucketBusy || !bucketName.trim() || !workspaceId.trim()}>
                 Sync workspace
               </button>
             </div>
@@ -321,10 +292,7 @@ export function VideoClippingForm() {
                   <button
                     type="button"
                     key={workspace}
-                    onClick={() => {
-                      setWorkspaceQuery(workspace);
-                      setWorkspaceId(workspace);
-                    }}
+                    onClick={() => syncBucketWorkspace(workspace)}
                   >
                     {workspace}
                   </button>
@@ -400,32 +368,6 @@ export function VideoClippingForm() {
     return (
       <div className="stage-grid three-column">
         <Panel title="Source Video">
-          <div className="field">
-            <label htmlFor="workspace">Workspace</label>
-            <div className="search-field compact">
-              <Search size={16} />
-              <input
-                id="workspace"
-                value={workspaceQuery}
-                onChange={(event) => setWorkspaceQuery(event.target.value)}
-                placeholder="Search or type a new workspace"
-              />
-            </div>
-            <div className="actions">
-              <button className="button secondary" type="button" onClick={() => useWorkspace()} disabled={busy || !workspaceQuery.trim()}>
-                Use/Create
-              </button>
-              <span className="muted code">{workspaceId}</span>
-            </div>
-            <div className="workspace-options">
-              {filteredWorkspaces.map((workspace) => (
-                <button type="button" key={workspace.id} onClick={() => useWorkspace(workspace.id)}>
-                  {workspace.id}
-                </button>
-              ))}
-            </div>
-          </div>
-
           <div className="upload-drop">
             <UploadCloud size={28} />
             <strong>Upload video file</strong>
@@ -719,4 +661,15 @@ export function VideoClippingForm() {
       </div>
     );
   }
+}
+
+function WorkspaceContext({ workspaceId }: { workspaceId: string }) {
+  return (
+    <div className="workspace-context">
+      <span>
+        Workspace <strong>{workspaceId}</strong>
+      </span>
+      <Link href="/workspaces">Change</Link>
+    </div>
+  );
 }

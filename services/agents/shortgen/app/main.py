@@ -6,7 +6,7 @@ from uuid import UUID
 from mpstudio.contracts import AssetKind, AgentTaskKind, AgentTaskPayload, EventPayload, JobStatus, StepName
 from mpstudio.database import session_scope
 from mpstudio.media import create_demo_mp4, render_timeline_mp4
-from mpstudio.repository import append_output_asset, create_asset, record_event, set_job_status
+from mpstudio.repository import append_output_asset, record_event, set_job_status, upsert_asset
 from mpstudio.settings import get_settings
 from mpstudio.shorts_planner import build_shorts_plan
 from mpstudio.storage import StorageClient
@@ -146,7 +146,7 @@ def handle_shortgen(payload: AgentTaskPayload) -> None:
         transcode_metadata.setdefault("render_backend", "gcp_transcoder")
 
     with session_scope() as session:
-        script_asset = create_asset(
+        script_asset, _ = upsert_asset(
             session,
             workspace_id=payload.workspace_id,
             kind=AssetKind.metadata,
@@ -154,7 +154,7 @@ def handle_shortgen(payload: AgentTaskPayload) -> None:
             filename=script_filename,
             content_type="application/json",
         )
-        video_asset = create_asset(
+        video_asset, _ = upsert_asset(
             session,
             workspace_id=payload.workspace_id,
             kind=AssetKind.generated_short,

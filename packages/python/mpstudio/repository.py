@@ -45,6 +45,36 @@ def list_workspaces(session: Session, lane: WorkflowKind | None = None) -> list[
     return list(rows)
 
 
+def delete_workspace(session: Session, workspace_id: str) -> dict[str, int] | None:
+    workspace = session.get(Workspace, workspace_id)
+    if workspace is None:
+        return None
+
+    jobs = list(session.scalars(select(Job).where(Job.workspace_id == workspace_id)))
+    job_ids = [job.id for job in jobs]
+    tasks = [
+        task
+        for task in session.scalars(select(AgentTask))
+        if (task.payload or {}).get("workspace_id") == workspace_id
+        or (job_ids and str((task.payload or {}).get("job_id")) in job_ids)
+    ]
+    for task in tasks:
+        session.delete(task)
+
+    if job_ids:
+        session.execute(delete(JobEventRow).where(JobEventRow.job_id.in_(job_ids)))
+        session.execute(delete(Job).where(Job.id.in_(job_ids)))
+
+    assets = list(session.scalars(select(Asset).where(Asset.workspace_id == workspace_id)))
+    asset_count = len(assets)
+    if assets:
+        session.execute(delete(Asset).where(Asset.workspace_id == workspace_id))
+
+    session.delete(workspace)
+    session.flush()
+    return {"jobs": len(jobs), "assets": asset_count, "tasks": len(tasks)}
+
+
 def create_asset(
     session: Session,
     *,

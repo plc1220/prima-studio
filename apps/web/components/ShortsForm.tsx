@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { Download, RefreshCw, SlidersHorizontal, Trash2, WandSparkles } from "lucide-react";
+import { CheckCircle2, ChevronDown, ChevronUp, Download, RefreshCw, SlidersHorizontal, Trash2, WandSparkles } from "lucide-react";
 import {
   apiFetch,
   type DownloadUrlResponse,
@@ -16,12 +16,11 @@ import { StatusPill } from "@/components/StatusPill";
 
 const defaultWorkspaceId = "media-prima-shorts";
 const lane = "shorts";
+const pipelineSteps = ["Script", "Search terms", "Media plan", "Voice/Subtitles", "Render review"];
 
 export function ShortsForm() {
   const params = useSearchParams();
   const [workspaceId, setWorkspaceId] = useState(params.get("workspace") || defaultWorkspaceId);
-  const [workspaceQuery, setWorkspaceQuery] = useState(params.get("workspace") || defaultWorkspaceId);
-  const [workspaces, setWorkspaces] = useState<WorkspaceRecord[]>([]);
   const [prompt, setPrompt] = useState("Buat video pendek tentang kandungan digital baharu Media Prima.");
   const [language, setLanguage] = useState("ms-MY");
   const [voiceName, setVoiceName] = useState("ms-MY-YasminNeural");
@@ -29,6 +28,7 @@ export function ShortsForm() {
   const [duration, setDuration] = useState(30);
   const [jobs, setJobs] = useState<JobDetail[]>([]);
   const [downloadUrls, setDownloadUrls] = useState<Record<string, string>>({});
+  const [expandedJobId, setExpandedJobId] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -51,15 +51,7 @@ export function ShortsForm() {
     }
   }
 
-  async function refreshWorkspaces() {
-    try {
-      setWorkspaces(await apiFetch<WorkspaceRecord[]>(`/workspaces?lane=${lane}`));
-    } catch {
-      setWorkspaces([]);
-    }
-  }
-
-  async function ensureSelectedWorkspace(nextWorkspace = workspaceQuery) {
+  async function ensureSelectedWorkspace(nextWorkspace = workspaceId) {
     const trimmed = nextWorkspace.trim();
     if (!trimmed) throw new Error("Workspace is required");
     await apiFetch<WorkspaceRecord>("/workspaces", {
@@ -67,45 +59,27 @@ export function ShortsForm() {
       body: JSON.stringify({ workspace_id: trimmed, lane })
     });
     setWorkspaceId(trimmed);
-    setWorkspaceQuery(trimmed);
     return trimmed;
-  }
-
-  async function useWorkspace(nextWorkspace = workspaceQuery) {
-    setBusy(true);
-    setMessage("");
-    try {
-      const selected = await ensureSelectedWorkspace(nextWorkspace);
-      await Promise.all([refreshHistory(selected), refreshWorkspaces()]);
-      setMessage(`Using workspace ${selected}`);
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Unable to create workspace");
-    } finally {
-      setBusy(false);
-    }
   }
 
   useEffect(() => {
     refreshHistory();
-    refreshWorkspaces();
   }, []);
 
-  const filteredWorkspaces = useMemo(() => {
-    const needle = workspaceQuery.trim().toLowerCase();
-    return workspaces
-      .filter((workspace) => !needle || workspace.id.toLowerCase().includes(needle))
-      .slice(0, 8);
-  }, [workspaceQuery, workspaces]);
-
-  const generatedShorts = useMemo(
-    () =>
-      jobs.flatMap((job) =>
-        job.outputs
-          .filter((asset) => asset.kind === "generated_short")
-          .map((asset) => ({ job, asset }))
-      ),
-    [jobs]
-  );
+  const generatedShorts = useMemo(() => {
+    const seenUris = new Set<string>();
+    return jobs.flatMap((job) =>
+      job.outputs
+        .filter((asset) => asset.kind === "generated_short")
+        .filter((asset) => {
+          if (seenUris.has(asset.gcs_uri)) return false;
+          seenUris.add(asset.gcs_uri);
+          return true;
+        })
+        .map((asset) => ({ job, asset }))
+    );
+  }, [jobs]);
+  const latestJob = jobs[0];
 
   async function startWorkflow() {
     setBusy(true);
@@ -124,7 +98,8 @@ export function ShortsForm() {
           duration_seconds: duration
         })
       });
-      window.location.assign(`/jobs/${response.job_id}`);
+      await refreshHistory(selectedWorkspace);
+      setMessage(`Shorts job queued: ${response.job_id}`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Failed to start workflow");
     } finally {
@@ -152,6 +127,16 @@ export function ShortsForm() {
     }
   }
 
+  function showLatestJobStatus(step: string) {
+    if (!latestJob) return;
+    setExpandedJobId((current) => (current === latestJob.id ? "" : latestJob.id));
+    setMessage(`${step}: latest shorts job ${latestJob.id} is ${latestJob.status}.`);
+  }
+
+  function toggleJobDetails(jobId: string) {
+    setExpandedJobId((current) => (current === jobId ? "" : jobId));
+  }
+
   return (
     <>
       <section className="topbar">
@@ -171,6 +156,7 @@ export function ShortsForm() {
             <h2>Prompt</h2>
             <p className="muted">Start from a direct brief or preserve an approved newsroom angle, script, and search terms.</p>
           </div>
+          <WorkspaceContext workspaceId={workspaceId} />
           <div className="field">
             <label htmlFor="prompt">Video subject / prompt</label>
             <textarea id="prompt" value={prompt} onChange={(event) => setPrompt(event.target.value)} />
@@ -181,30 +167,6 @@ export function ShortsForm() {
             <p className="muted">These settings map to the script, voice, aspect, duration, and render plan.</p>
           </div>
           <div className="field-grid">
-            <div className="field">
-              <label htmlFor="workspace">Workspace</label>
-              <div className="search-field compact">
-                <input
-                  id="workspace"
-                  value={workspaceQuery}
-                  onChange={(event) => setWorkspaceQuery(event.target.value)}
-                  placeholder="Search or type a new workspace"
-                />
-              </div>
-              <div className="actions">
-                <button className="button secondary" type="button" onClick={() => useWorkspace()} disabled={busy || !workspaceQuery.trim()}>
-                  Use/Create
-                </button>
-                <span className="muted code">{workspaceId}</span>
-              </div>
-              <div className="workspace-options">
-                {filteredWorkspaces.map((workspace) => (
-                  <button type="button" key={workspace.id} onClick={() => useWorkspace(workspace.id)}>
-                    {workspace.id}
-                  </button>
-                ))}
-              </div>
-            </div>
             <div className="field">
               <label htmlFor="language">Language</label>
               <select id="language" value={language} onChange={(event) => setLanguage(event.target.value)}>
@@ -247,13 +209,48 @@ export function ShortsForm() {
             <h2>Pipeline</h2>
           </div>
           <div className="pipeline-list">
-            <span>Script</span>
-            <span>Search terms</span>
-            <span>Media plan</span>
-            <span>Voice/Subtitles</span>
-            <span>Render review</span>
+            {pipelineSteps.map((step, index) => (
+              <button className="pipeline-step" type="button" key={step} onClick={() => showLatestJobStatus(step)} disabled={!latestJob}>
+                <span className="step-number">{index + 1}</span>
+                <span>{step}</span>
+                {latestJob ? <StatusPill status={latestJob.status} /> : null}
+              </button>
+            ))}
+          </div>
+          <div className="pipeline-job-list">
+            {jobs.slice(0, 5).map((job, index) => (
+              <JobDetailsToggle
+                job={job}
+                key={job.id}
+                label={index === 0 ? "Latest job" : `Job ${index + 1}`}
+                expanded={expandedJobId === job.id}
+                onToggle={() => toggleJobDetails(job.id)}
+              />
+            ))}
+            {!jobs.length ? <p className="muted">No shorts jobs yet.</p> : null}
           </div>
         </aside>
+      </section>
+
+      <section className="list-panel">
+        <div className="section-heading">
+          <h2>Recent shorts jobs</h2>
+          <p className="muted">Track queued, running, failed, and completed jobs without leaving this page.</p>
+        </div>
+        {jobs.length ? (
+          jobs.slice(0, 8).map((job) => (
+            <JobDetailsToggle
+              job={job}
+              key={job.id}
+              label={job.id}
+              expanded={expandedJobId === job.id}
+              onToggle={() => toggleJobDetails(job.id)}
+              wide
+            />
+          ))
+        ) : (
+          <div className="empty-state">No shorts jobs yet for this workspace.</div>
+        )}
       </section>
 
       <section className="list-panel">
@@ -297,5 +294,84 @@ export function ShortsForm() {
         )}
       </section>
     </>
+  );
+}
+
+function WorkspaceContext({ workspaceId }: { workspaceId: string }) {
+  return (
+    <div className="workspace-context">
+      <span>
+        Workspace <strong>{workspaceId}</strong>
+      </span>
+      <Link href="/workspaces">Change</Link>
+    </div>
+  );
+}
+
+function JobDetailsToggle({
+  job,
+  label,
+  expanded,
+  onToggle,
+  wide = false
+}: {
+  job: JobDetail;
+  label: string;
+  expanded: boolean;
+  onToggle: () => void;
+  wide?: boolean;
+}) {
+  const Icon = expanded ? ChevronUp : ChevronDown;
+  const latestEvent = job.events[job.events.length - 1];
+
+  return (
+    <article className={wide ? "job-details-row wide" : "job-details-row"}>
+      <button className="job-details-toggle" type="button" onClick={onToggle} aria-expanded={expanded}>
+        <span className="job-details-title">
+          {wide ? <CheckCircle2 size={16} /> : null}
+          <strong>{label}</strong>
+          <small>{new Date(job.created_at).toLocaleString()}</small>
+        </span>
+        <StatusPill status={job.status} />
+        <Icon size={16} />
+      </button>
+      {expanded ? (
+        <div className="job-details-panel">
+          <div className="job-detail-grid">
+            <span>
+              <strong>ID</strong>
+              <small>{job.id}</small>
+            </span>
+            <span>
+              <strong>Updated</strong>
+              <small>{new Date(job.updated_at).toLocaleString()}</small>
+            </span>
+            <span>
+              <strong>Outputs</strong>
+              <small>{job.outputs.length}</small>
+            </span>
+          </div>
+          {job.error ? <p className="job-error">{job.error}</p> : null}
+          {latestEvent ? (
+            <div className="job-event-summary">
+              <strong>{latestEvent.step}</strong>
+              <span>{latestEvent.message}</span>
+            </div>
+          ) : (
+            <p className="muted">No events recorded yet.</p>
+          )}
+          {job.outputs.length ? (
+            <div className="job-output-list">
+              {job.outputs.slice(0, 3).map((asset) => (
+                <span key={asset.id}>
+                  <strong>{asset.filename}</strong>
+                  <small>{asset.kind}</small>
+                </span>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </article>
   );
 }

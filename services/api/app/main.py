@@ -44,6 +44,7 @@ from mpstudio.repository import (
     record_event,
     delete_asset,
     delete_job,
+    delete_workspace,
     upsert_asset,
 )
 from mpstudio.media import create_demo_mp4
@@ -95,6 +96,15 @@ async def create_workspace(request: Request) -> WorkspaceRecord:
     with session_scope() as session:
         row = ensure_workspace(session, workspace_id, lane=lane)
     return WorkspaceRecord(id=row.id, name=row.name, lane=row.lane, created_at=row.created_at)
+
+
+@app.delete("/workspaces/{workspace_id}")
+def remove_workspace(workspace_id: str) -> dict[str, int | str]:
+    with session_scope() as session:
+        removed = delete_workspace(session, workspace_id)
+    if removed is None:
+        raise HTTPException(status_code=404, detail="workspace not found")
+    return {"status": "deleted", "workspace_id": workspace_id, **removed}
 
 
 @app.get("/workspaces/{workspace_id}/assets")

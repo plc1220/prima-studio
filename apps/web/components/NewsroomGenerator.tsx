@@ -8,7 +8,6 @@ import {
   Clock,
   Newspaper,
   RefreshCw,
-  Search,
   Send,
   SlidersHorizontal,
   Sparkles,
@@ -37,8 +36,6 @@ function sleep(ms: number) {
 export function NewsroomGenerator() {
   const params = useSearchParams();
   const [workspaceId, setWorkspaceId] = useState(params.get("workspace") || defaultWorkspaceId);
-  const [workspaceQuery, setWorkspaceQuery] = useState(params.get("workspace") || defaultWorkspaceId);
-  const [workspaces, setWorkspaces] = useState<WorkspaceRecord[]>([]);
   const [brief, setBrief] = useState("Malaysia digital audiences are discussing rising living costs, creator economy jobs, and how young families are adapting.");
   const [audience, setAudience] = useState("Urban Malaysian Gen Z and young families");
   const [platform, setPlatform] = useState("TikTok, Reels, Shorts");
@@ -57,14 +54,6 @@ export function NewsroomGenerator() {
   const [selectedAngleId, setSelectedAngleId] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
-
-  async function refreshWorkspaces() {
-    try {
-      setWorkspaces(await apiFetch<WorkspaceRecord[]>(`/workspaces?lane=${lane}`));
-    } catch {
-      setWorkspaces([]);
-    }
-  }
 
   async function refreshHistory(nextWorkspace = workspaceId) {
     setMessage("");
@@ -93,7 +82,7 @@ export function NewsroomGenerator() {
     }
   }
 
-  async function ensureSelectedWorkspace(nextWorkspace = workspaceQuery) {
+  async function ensureSelectedWorkspace(nextWorkspace = workspaceId) {
     const trimmed = nextWorkspace.trim();
     if (!trimmed) throw new Error("Workspace is required");
     await apiFetch<WorkspaceRecord>("/workspaces", {
@@ -101,35 +90,12 @@ export function NewsroomGenerator() {
       body: JSON.stringify({ workspace_id: trimmed, lane })
     });
     setWorkspaceId(trimmed);
-    setWorkspaceQuery(trimmed);
     return trimmed;
-  }
-
-  async function useWorkspace(nextWorkspace = workspaceQuery) {
-    setBusy(true);
-    setMessage("");
-    try {
-      const selected = await ensureSelectedWorkspace(nextWorkspace);
-      await Promise.all([refreshHistory(selected), refreshWorkspaces()]);
-      setMessage(`Using workspace ${selected}`);
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Unable to create workspace");
-    } finally {
-      setBusy(false);
-    }
   }
 
   useEffect(() => {
     refreshHistory();
-    refreshWorkspaces();
   }, []);
-
-  const filteredWorkspaces = useMemo(() => {
-    const needle = workspaceQuery.trim().toLowerCase();
-    return workspaces
-      .filter((workspace) => !needle || workspace.id.toLowerCase().includes(needle))
-      .slice(0, 8);
-  }, [workspaceQuery, workspaces]);
 
   const packageRows = useMemo(
     () => Object.values(packagesByJob).sort((a, b) => Date.parse(b.generated_at) - Date.parse(a.generated_at)),
@@ -241,7 +207,7 @@ export function NewsroomGenerator() {
           source_package_uri: narrative.handoff.source_package_uri
         })
       });
-      window.location.assign(`/jobs/${response.job_id}`);
+      setMessage(`Shorts job queued in ${selectedWorkspace}: ${response.job_id}`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unable to hand off package");
     } finally {
@@ -268,37 +234,13 @@ export function NewsroomGenerator() {
             <h2>Brief</h2>
             <p className="muted">Start broad, then let the slate narrow the strongest playable angles.</p>
           </div>
+          <WorkspaceContext workspaceId={workspaceId} />
           <div className="field">
             <label htmlFor="brief">Newsroom brief / trend</label>
             <textarea id="brief" value={brief} onChange={(event) => setBrief(event.target.value)} />
           </div>
 
           <div className="field-grid newsroom-controls">
-            <div className="field">
-              <label htmlFor="workspace">Workspace</label>
-              <div className="search-field compact">
-                <Search size={16} />
-                <input
-                  id="workspace"
-                  value={workspaceQuery}
-                  onChange={(event) => setWorkspaceQuery(event.target.value)}
-                  placeholder="Search or type a new workspace"
-                />
-              </div>
-              <div className="actions">
-                <button className="button secondary" type="button" onClick={() => useWorkspace()} disabled={busy || !workspaceQuery.trim()}>
-                  Use/Create
-                </button>
-                <span className="muted code">{workspaceId}</span>
-              </div>
-              <div className="workspace-options">
-                {filteredWorkspaces.map((workspace) => (
-                  <button type="button" key={workspace.id} onClick={() => useWorkspace(workspace.id)}>
-                    {workspace.id}
-                  </button>
-                ))}
-              </div>
-            </div>
             <div className="field">
               <label htmlFor="audience">Audience</label>
               <input id="audience" value={audience} onChange={(event) => setAudience(event.target.value)} />
@@ -516,4 +458,15 @@ function narrativeFor(newsroomPackage: NewsroomPackage, topicId: string, angleId
 function shortsWorkspaceFor(newsroomWorkspace: string) {
   if (newsroomWorkspace.includes("newsroom")) return newsroomWorkspace.replace(/newsroom/g, "shorts");
   return `${newsroomWorkspace}-shorts`;
+}
+
+function WorkspaceContext({ workspaceId }: { workspaceId: string }) {
+  return (
+    <div className="workspace-context">
+      <span>
+        Workspace <strong>{workspaceId}</strong>
+      </span>
+      <Link href="/workspaces">Change</Link>
+    </div>
+  );
 }

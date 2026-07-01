@@ -348,6 +348,15 @@ h2 {
   background: var(--ink);
 }
 
+.button.danger {
+  background: var(--accent);
+  color: #fff;
+}
+
+.button.danger:hover {
+  background: var(--brand-strong);
+}
+
 .button:disabled {
   opacity: 0.55;
   cursor: not-allowed;
@@ -495,6 +504,46 @@ h2 {
 .workspace-search {
   display: grid;
   grid-template-columns: minmax(260px, 560px);
+}
+
+.workspace-create {
+  display: grid;
+  grid-template-columns: minmax(300px, 420px) minmax(280px, 560px);
+  gap: 12px;
+  align-items: center;
+  background: #fff;
+  border: 1px solid var(--line);
+  padding: 14px;
+}
+
+.lane-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.lane-pill {
+  min-height: 42px;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--ink);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.lane-pill:hover,
+.lane-pill.active {
+  border-color: var(--brand);
+  color: var(--brand);
+  background: #fff5f5;
+}
+
+.workspace-create-field {
+  min-width: 0;
 }
 
 .workspace-list {
@@ -764,6 +813,113 @@ h2 {
   color: var(--muted);
 }
 
+.pipeline-job-list {
+  display: grid;
+  gap: 8px;
+}
+
+.job-details-row {
+  border: 1px solid var(--line);
+  background: #fff;
+}
+
+.job-details-row.wide {
+  border-width: 1px 0 0;
+}
+
+.job-details-row.wide:first-child {
+  border-top: 0;
+}
+
+.job-details-toggle {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.job-details-toggle:hover {
+  background: var(--panel-soft);
+}
+
+.job-details-title {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.job-details-title svg {
+  grid-row: 1 / span 2;
+  align-self: center;
+}
+
+.job-details-title:has(svg) {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.job-details-title strong,
+.job-details-title small {
+  min-width: 0;
+  word-break: break-word;
+}
+
+.job-details-title small,
+.job-detail-grid small,
+.job-output-list small {
+  color: var(--muted);
+}
+
+.job-details-panel {
+  display: grid;
+  gap: 10px;
+  border-top: 1px solid var(--line);
+  background: var(--panel-soft);
+  padding: 12px;
+}
+
+.job-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.job-detail-grid span,
+.job-output-list span,
+.job-event-summary {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  border: 1px solid var(--line);
+  background: #fff;
+  padding: 8px;
+  font-size: 12px;
+}
+
+.job-detail-grid small,
+.job-event-summary span,
+.job-output-list small {
+  word-break: break-word;
+}
+
+.job-error {
+  margin: 0;
+  color: var(--accent);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.job-output-list {
+  display: grid;
+  gap: 6px;
+}
+
 .asset-table,
 .timeline-table {
   border: 1px solid var(--line);
@@ -975,12 +1131,42 @@ h2 {
   line-height: 1.35;
 }
 
-.pipeline-list span {
+.pipeline-list > span,
+.pipeline-step {
   border: 1px solid var(--line);
   padding: 10px 12px;
   background: var(--panel-soft);
   font-weight: 700;
   font-size: 13px;
+}
+
+.pipeline-step {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.pipeline-step:hover {
+  border-color: var(--brand);
+  background: #fff5f5;
+}
+
+.pipeline-step:disabled {
+  color: var(--muted);
+  cursor: default;
+}
+
+.pipeline-step:disabled:hover {
+  border-color: var(--line);
+  background: var(--panel-soft);
+}
+
+.pipeline-step .status {
+  justify-self: end;
 }
 
 .metric-list {
@@ -1051,7 +1237,37 @@ h2 {
 }
 
 .tagged-workspace-row {
-  grid-template-columns: minmax(280px, 1.2fr) minmax(220px, 0.7fr) auto;
+  grid-template-columns: minmax(280px, 1fr) auto;
+  background: #fff;
+  transition: background 160ms ease;
+}
+
+.tagged-workspace-row:hover,
+.tagged-workspace-row:focus-within {
+  background: #fffafa;
+}
+
+.workspace-open-area {
+  align-self: stretch;
+}
+
+.workspace-row-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.workspace-delete {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 160ms ease, border-color 160ms ease, color 160ms ease, background 160ms ease;
+}
+
+.tagged-workspace-row:hover .workspace-delete,
+.tagged-workspace-row:focus-within .workspace-delete {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .workspace-main,
@@ -1087,6 +1303,60 @@ h2 {
 .workspace-tag.untagged {
   color: var(--muted);
   background: #fff;
+}
+
+.workspace-context {
+  min-height: 44px;
+  border: 1px solid var(--line);
+  background: var(--panel-soft);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+}
+
+.workspace-context span {
+  color: var(--muted);
+  min-width: 0;
+}
+
+.workspace-context strong {
+  color: var(--ink);
+  word-break: break-word;
+}
+
+.workspace-context a {
+  color: var(--brand);
+  font-weight: 800;
+  flex: 0 0 auto;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(31, 31, 31, 0.48);
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.modal-panel {
+  width: min(460px, 100%);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-top: 4px solid var(--accent);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
+  display: grid;
+  gap: 16px;
+  padding: 22px;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
 }
 
 .tag-actions {
@@ -1404,6 +1674,7 @@ h2 {
   .stage-grid.three-column,
   .stage-grid.two-column,
   .lane-grid,
+  .workspace-create,
   .workspace-row,
   .output-grid,
   .video-grid,
@@ -1449,6 +1720,15 @@ h2 {
     display: grid;
     grid-template-columns: 1fr;
     justify-content: start;
+  }
+
+  .workspace-row-right {
+    justify-content: flex-start;
+  }
+
+  .workspace-delete {
+    opacity: 1;
+    pointer-events: auto;
   }
 
   .job-row .status {

@@ -5,13 +5,21 @@ import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import {
   CheckCircle2,
+  Check,
+  ChevronDown,
+  ChevronRight,
   Clock,
+  Gauge,
+  Globe2,
   Newspaper,
+  Radio,
   RefreshCw,
   Send,
+  ShieldCheck,
   SlidersHorizontal,
   Sparkles,
-  Target
+  Target,
+  X
 } from "lucide-react";
 import {
   apiFetch,
@@ -28,6 +36,29 @@ import { StatusPill } from "@/components/StatusPill";
 const defaultWorkspaceId = "media-prima-newsroom";
 const lane = "newsroom";
 const shortsLane = "shorts";
+
+const liveSignals = [
+  { label: "Trend velocity", value: "+38%", detail: "Living costs and household budgets accelerated over the last hour." },
+  { label: "Global signal alert", value: "SEA", detail: "Creator economy and family finance angles are rising across regional feeds." },
+  { label: "Archive media match", value: "3 assets", detail: "sample-broadcast.mp4 and two clinic explainers match the topic cluster." }
+];
+
+const automatedRecommendations = [
+  {
+    title: "Young families explain the new cost-of-living playbook",
+    reasoning: "Assembled because 'Living Costs' matches library asset sample-broadcast.mp4 and today's urban-family audience filter.",
+    format: "9:16 short package",
+    confidence: "High confidence",
+    signal: "Trend velocity +38%"
+  },
+  {
+    title: "Creator economy side income, without the hype",
+    reasoning: "Assembled because creator-job chatter overlaps with verified newsroom angles and available explainer footage.",
+    format: "Carousel-to-short handoff",
+    confidence: "Medium confidence",
+    signal: "Regional signal SEA"
+  }
+];
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -52,6 +83,9 @@ export function NewsroomGenerator() {
   const [activeJobId, setActiveJobId] = useState("");
   const [selectedTopicId, setSelectedTopicId] = useState("");
   const [selectedAngleId, setSelectedAngleId] = useState("");
+  const [curationVelocity, setCurationVelocity] = useState(62);
+  const [exclusions, setExclusions] = useState("politics, unverified health claims");
+  const [guardrailsOpen, setGuardrailsOpen] = useState(true);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -240,69 +274,84 @@ export function NewsroomGenerator() {
             <textarea id="brief" value={brief} onChange={(event) => setBrief(event.target.value)} />
           </div>
 
-          <div className="field-grid newsroom-controls">
-            <div className="field">
-              <label htmlFor="audience">Audience</label>
-              <input id="audience" value={audience} onChange={(event) => setAudience(event.target.value)} />
-            </div>
-            <div className="field">
-              <label htmlFor="platform">Platform</label>
-              <select id="platform" value={platform} onChange={(event) => setPlatform(event.target.value)}>
-                <option value="TikTok, Reels, Shorts">TikTok / Reels / Shorts</option>
-                <option value="TikTok">TikTok</option>
-                <option value="Instagram Reels">Instagram Reels</option>
-                <option value="YouTube Shorts">YouTube Shorts</option>
-                <option value="Facebook video">Facebook video</option>
-              </select>
-            </div>
-            <div className="field">
-              <label htmlFor="urgency">Urgency</label>
-              <select id="urgency" value={urgency} onChange={(event) => setUrgency(event.target.value)}>
-                <option value="today">Today</option>
-                <option value="breaking / now">Breaking / now</option>
-                <option value="this week">This week</option>
-                <option value="campaign evergreen">Campaign evergreen</option>
-              </select>
-            </div>
-            <div className="field">
-              <label htmlFor="tone">Tone</label>
-              <input id="tone" value={tone} onChange={(event) => setTone(event.target.value)} />
-            </div>
-            <div className="field">
-              <label htmlFor="brand-fit">Brand / editorial fit</label>
-              <input id="brand-fit" value={brandFit} onChange={(event) => setBrandFit(event.target.value)} />
-            </div>
-            <div className="field">
-              <label htmlFor="slate-mode">Slate</label>
-              <select id="slate-mode" value={slateMode} onChange={(event) => setSlateMode(event.target.value)}>
-                <option value="daily">Daily</option>
-                <option value="campaign">Campaign</option>
-                <option value="breaking desk">Breaking desk</option>
-              </select>
-            </div>
-            <div className="field">
-              <label htmlFor="slate-size">Topic cards</label>
-              <input id="slate-size" type="number" min={2} max={8} value={slateSize} onChange={(event) => setSlateSize(Number(event.target.value))} />
-            </div>
-            <div className="field">
-              <label htmlFor="language">Language</label>
-              <select id="language" value={language} onChange={(event) => setLanguage(event.target.value)}>
-                <option value="ms-MY">Malay</option>
-                <option value="en-MY">English</option>
-              </select>
-            </div>
-            <div className="field">
-              <label htmlFor="aspect">Aspect ratio</label>
-              <select id="aspect" value={aspectRatio} onChange={(event) => setAspectRatio(event.target.value)}>
-                <option value="9:16">9:16 portrait</option>
-                <option value="16:9">16:9 landscape</option>
-                <option value="1:1">1:1 square</option>
-              </select>
-            </div>
-            <div className="field">
-              <label htmlFor="duration">Duration seconds</label>
-              <input id="duration" type="number" min={10} max={180} value={duration} onChange={(event) => setDuration(Number(event.target.value))} />
-            </div>
+          <div className="newsroom-form-sections">
+            <section className="form-section">
+              <div className="section-heading compact-heading">
+                <h3>Context and trend</h3>
+              </div>
+              <div className="field-grid newsroom-context-grid">
+                <div className="field field-wide">
+                  <label htmlFor="audience">Audience</label>
+                  <input id="audience" value={audience} onChange={(event) => setAudience(event.target.value)} />
+                </div>
+                <div className="field field-medium">
+                  <label htmlFor="platform">Platform</label>
+                  <select id="platform" value={platform} onChange={(event) => setPlatform(event.target.value)}>
+                    <option value="TikTok, Reels, Shorts">TikTok / Reels / Shorts</option>
+                    <option value="TikTok">TikTok</option>
+                    <option value="Instagram Reels">Instagram Reels</option>
+                    <option value="YouTube Shorts">YouTube Shorts</option>
+                    <option value="Facebook video">Facebook video</option>
+                  </select>
+                </div>
+                <div className="field field-medium">
+                  <label htmlFor="urgency">Urgency</label>
+                  <select id="urgency" value={urgency} onChange={(event) => setUrgency(event.target.value)}>
+                    <option value="today">Today</option>
+                    <option value="breaking / now">Breaking / now</option>
+                    <option value="this week">This week</option>
+                    <option value="campaign evergreen">Campaign evergreen</option>
+                  </select>
+                </div>
+                <div className="field field-wide">
+                  <label htmlFor="tone">Tone</label>
+                  <input id="tone" value={tone} onChange={(event) => setTone(event.target.value)} />
+                </div>
+                <div className="field field-span-2 field-wide">
+                  <label htmlFor="brand-fit">Brand / editorial fit</label>
+                  <input id="brand-fit" value={brandFit} onChange={(event) => setBrandFit(event.target.value)} />
+                </div>
+              </div>
+            </section>
+
+            <section className="form-section">
+              <div className="section-heading compact-heading">
+                <h3>Output configuration</h3>
+              </div>
+              <div className="field-grid newsroom-output-grid">
+                <div className="field field-medium">
+                  <label htmlFor="slate-mode">Slate</label>
+                  <select id="slate-mode" value={slateMode} onChange={(event) => setSlateMode(event.target.value)}>
+                    <option value="daily">Daily</option>
+                    <option value="campaign">Campaign</option>
+                    <option value="breaking desk">Breaking desk</option>
+                  </select>
+                </div>
+                <div className="field field-numeric">
+                  <label htmlFor="slate-size">Topic cards</label>
+                  <input id="slate-size" type="number" min={2} max={8} value={slateSize} onChange={(event) => setSlateSize(Number(event.target.value))} />
+                </div>
+                <div className="field field-medium">
+                  <label htmlFor="language">Language</label>
+                  <select id="language" value={language} onChange={(event) => setLanguage(event.target.value)}>
+                    <option value="ms-MY">Malay</option>
+                    <option value="en-MY">English</option>
+                  </select>
+                </div>
+                <div className="field field-medium">
+                  <label htmlFor="aspect">Aspect ratio</label>
+                  <select id="aspect" value={aspectRatio} onChange={(event) => setAspectRatio(event.target.value)}>
+                    <option value="9:16">9:16 portrait</option>
+                    <option value="16:9">16:9 landscape</option>
+                    <option value="1:1">1:1 square</option>
+                  </select>
+                </div>
+                <div className="field field-numeric">
+                  <label htmlFor="duration">Duration seconds</label>
+                  <input id="duration" type="number" min={10} max={180} value={duration} onChange={(event) => setDuration(Number(event.target.value))} />
+                </div>
+              </div>
+            </section>
           </div>
 
           <div className="actions">
@@ -323,17 +372,17 @@ export function NewsroomGenerator() {
             <SlidersHorizontal size={18} />
             <h2>Desk filters</h2>
           </div>
-          <div className="metric-list">
-            <div><Target size={16} /> {audience}</div>
-            <div><Clock size={16} /> {urgency}</div>
-            <div><Newspaper size={16} /> {slateMode}</div>
+          <div className="metric-list accordion-list">
+            <button type="button"><Target size={16} /> <span>{audience}</span><ChevronRight size={15} /></button>
+            <button type="button"><Clock size={16} /> <span>{urgency}</span><ChevronRight size={15} /></button>
+            <button type="button"><Newspaper size={16} /> <span>{slateMode}</span><ChevronRight size={15} /></button>
           </div>
-          <div className="pipeline-list">
-            <span>Research signals</span>
-            <span>Topic cards</span>
-            <span>Angle approval</span>
-            <span>Script package</span>
-            <span>Shorts handoff</span>
+          <div className="pipeline-list accordion-list">
+            <button type="button"><span>Research signals</span><ChevronDown size={15} /></button>
+            <button type="button"><span>Topic cards</span><ChevronRight size={15} /></button>
+            <button type="button"><span>Angle approval</span><ChevronRight size={15} /></button>
+            <button type="button"><span>Script package</span><ChevronRight size={15} /></button>
+            <button type="button"><span>Shorts handoff</span><ChevronRight size={15} /></button>
           </div>
           <div className="mini-jobs">
             {jobs.slice(0, 5).map((job) => (
@@ -344,6 +393,103 @@ export function NewsroomGenerator() {
             ))}
             {!jobs.length ? <span className="muted">No newsroom packages yet.</span> : null}
           </div>
+        </aside>
+      </section>
+
+      <section className="curation-workspace" aria-label="Automated AI curation workspace">
+        <aside className="curation-feed">
+          <div className="section-heading">
+            <div>
+              <div className="eyebrow">Live inputs</div>
+              <h2>Signal stream</h2>
+            </div>
+          </div>
+          <div className="signal-feed">
+            {liveSignals.map((signal) => (
+              <article className="signal-card" key={signal.label}>
+                <span className="signal-icon"><Radio size={16} /></span>
+                <div>
+                  <strong>{signal.label}</strong>
+                  <span>{signal.value}</span>
+                  <p>{signal.detail}</p>
+                </div>
+              </article>
+            ))}
+          </div>
+        </aside>
+
+        <div className="curation-packages">
+          <div className="section-heading">
+            <div>
+              <div className="eyebrow">Automated AI curation</div>
+              <h2>Ready-to-use content packages</h2>
+            </div>
+            <span className="status succeeded">Auto-ranked</span>
+          </div>
+          <div className="recommendation-list">
+            {automatedRecommendations.map((recommendation) => (
+              <article className="recommendation-card" key={recommendation.title}>
+                <div className="reasoning-block">{recommendation.reasoning}</div>
+                <div className="recommendation-body">
+                  <div>
+                    <h3>{recommendation.title}</h3>
+                    <p className="muted">{recommendation.format}</p>
+                  </div>
+                  <div className="card-meta">
+                    <span>{recommendation.confidence}</span>
+                    <span>{recommendation.signal}</span>
+                  </div>
+                </div>
+                <div className="recommendation-actions">
+                  <button className="button" type="button" onClick={() => setMessage(`Approved to slate: ${recommendation.title}`)}>
+                    <Check size={16} /> Approve to Slate
+                  </button>
+                  <button className="button secondary" type="button" onClick={() => setMessage(`Dismissed: ${recommendation.title}`)}>
+                    <X size={16} /> Dismiss
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+        </div>
+
+        <aside className="guardrails-sidebar">
+          <button className="guardrails-toggle" type="button" onClick={() => setGuardrailsOpen((open) => !open)} aria-expanded={guardrailsOpen}>
+            <span><ShieldCheck size={17} /> Automated guardrails</span>
+            {guardrailsOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+          </button>
+          {guardrailsOpen ? (
+            <div className="guardrails-body">
+              <div className="field slider-field">
+                <label htmlFor="curation-velocity"><Gauge size={15} /> Curation velocity</label>
+                <input
+                  id="curation-velocity"
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={curationVelocity}
+                  onChange={(event) => setCurationVelocity(Number(event.target.value))}
+                />
+                <span className="range-value">{curationVelocity}% balanced</span>
+              </div>
+              <div className="field">
+                <label htmlFor="topic-exclusions">Topic / keyword exclusions</label>
+                <input id="topic-exclusions" value={exclusions} onChange={(event) => setExclusions(event.target.value)} />
+              </div>
+              <label className="check-row">
+                <input type="checkbox" defaultChecked />
+                <span>Owned archive only</span>
+              </label>
+              <label className="check-row">
+                <input type="checkbox" defaultChecked />
+                <span>Verified newsroom sources</span>
+              </label>
+              <label className="check-row">
+                <input type="checkbox" />
+                <span><Globe2 size={15} /> Allow global public signals</span>
+              </label>
+            </div>
+          ) : null}
         </aside>
       </section>
 

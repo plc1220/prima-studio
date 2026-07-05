@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Bot,
   CheckCircle2,
+  CheckSquare,
   ClipboardCheck,
   FileJson,
   FileVideo,
@@ -56,6 +57,7 @@ const artifactKinds = [
 const sceneInsights = [
   {
     timecode: "00:00:08",
+    range: "00:00:08 - 00:00:24",
     title: "Doctor sets the concern",
     summary: "Clear setup, strong context, useful as the opening beat.",
     speaker: "Doctor",
@@ -63,6 +65,7 @@ const sceneInsights = [
   },
   {
     timecode: "00:01:12",
+    range: "00:01:12 - 00:01:38",
     title: "Practical next step explained",
     summary: "Best candidate for short-form clarity and trust.",
     speaker: "Doctor",
@@ -70,6 +73,7 @@ const sceneInsights = [
   },
   {
     timecode: "00:02:03",
+    range: "00:02:03 - 00:02:19",
     title: "Patient reaction beat",
     summary: "Useful transition into emotional payoff.",
     speaker: "Patient",
@@ -79,6 +83,7 @@ const sceneInsights = [
 
 const clipCandidates = [
   {
+    range: "00:01:12 - 00:01:38",
     duration: "0:26",
     title: "Key explanation for digital audience",
     reason: "Concise explanation, clean speaker focus, low setup cost.",
@@ -86,6 +91,7 @@ const clipCandidates = [
     score: 91
   },
   {
+    range: "00:02:03 - 00:02:19",
     duration: "0:16",
     title: "Reaction bridge",
     reason: "Human beat that creates emotional continuity before the final CTA.",
@@ -166,6 +172,9 @@ export function VideoClippingForm() {
   const selectedAsset = sourceAssets.find((asset) => asset.id === assetId);
   const latestJob = jobs[0];
   const activeStageMeta = productionStages.find((stage) => stage.id === activeStage) || productionStages[0];
+  const workflowReady = Boolean(assetId);
+  const latestFinalVideo = finalVideoAssets[0];
+  const stageAction = getStageAction();
 
   const filteredSourceAssets = useMemo(() => {
     const needle = assetQuery.trim().toLowerCase();
@@ -280,17 +289,17 @@ export function VideoClippingForm() {
       <section className="studio-command">
         <div>
           <div className="eyebrow">Video Clipping Lane</div>
-          <h1>Owned footage to reviewable social cuts</h1>
+          <h1>Editorial review bench for owned footage</h1>
           <p className="muted">
-            Work from a source video through scene intelligence, clip candidates, storyboard assembly, and final export while keeping every artifact traceable.
+            Select a source, review scene signals, shape the storyboard, and export a traceable social cut from one focused workspace.
           </p>
         </div>
         <div className="command-actions">
           <button className="icon-button" onClick={() => refreshWorkspace()} aria-label="Refresh workspace" title="Refresh workspace">
             <RefreshCw size={18} />
           </button>
-          <button className="button" type="button" onClick={startWorkflow} disabled={busy || !assetId}>
-            <PlayCircle size={16} /> Run cut
+          <button className="button" type="button" onClick={startWorkflow} disabled={busy || !workflowReady}>
+            {stageAction.icon} {stageAction.label}
           </button>
         </div>
       </section>
@@ -311,7 +320,7 @@ export function VideoClippingForm() {
               onClick={() => setActiveStage(stage.id)}
             >
               <span className="stage-icon">{stage.icon}</span>
-              <span>
+              <span className="production-stage-copy">
                 <strong>{stage.label}</strong>
                 <small>{stage.output}</small>
               </span>
@@ -325,16 +334,36 @@ export function VideoClippingForm() {
               <div className="eyebrow">{activeStageMeta.legacy}</div>
               <h2>{activeStageMeta.label}: {activeStageMeta.output}</h2>
             </div>
-            <span className="timecode">00:01:12:04</span>
+            <span className="timecode">01:12:04</span>
           </div>
 
           <div className="video-review-canvas">
             <div className="video-frame">
-              <div className="video-frame-copy">
-                <span>{selectedAsset?.filename || filename}</span>
-                <strong>{selectedAsset ? "Source locked" : "Awaiting source selection"}</strong>
+              <div className="frame-status-bar">
+                <span>{selectedAsset ? "Source locked" : "No source selected"}</span>
+                <span>{aspectRatio} review</span>
               </div>
-              <div className="video-playhead"><span /></div>
+              <div className="video-frame-copy">
+                <strong>{selectedAsset?.filename || filename}</strong>
+                <span>{selectedAsset ? "Ready for scene intelligence and cut review." : "Choose a workspace source to enable the workflow."}</span>
+              </div>
+              <div className="editor-timeline" aria-label="Review timeline">
+                <div className="timeline-ruler">
+                  <span>00:00</span>
+                  <span>01:00</span>
+                  <span>02:00</span>
+                  <span>03:00</span>
+                </div>
+                <div className="video-playhead">
+                  <span className="clip-marker marker-one" />
+                  <span className="clip-marker marker-two" />
+                  <span className="clip-marker marker-three" />
+                  <strong />
+                </div>
+                <div className="timeline-beats">
+                  {storyboardBeats.map((beat) => <span key={beat.label}>{beat.label}</span>)}
+                </div>
+              </div>
             </div>
             <div className="review-meta-strip">
               <span><strong>{sourceAssets.length}</strong> sources</span>
@@ -352,6 +381,10 @@ export function VideoClippingForm() {
             <div className="eyebrow">Assemble</div>
             <h2>Storyboard</h2>
           </div>
+          <div className="stage-next-action">
+            <span>{activeStageMeta.label}</span>
+            <strong>{stageAction.label}</strong>
+          </div>
           <div className="storyboard-list">
             {storyboardBeats.map((beat, index) => (
               <div className="storyboard-card" key={beat.label}>
@@ -362,10 +395,10 @@ export function VideoClippingForm() {
           </div>
           <div className="export-summary">
             <strong>58s review cut</strong>
-            <span>Fits TikTok, Reels, Shorts, and Media Prima social review.</span>
+            <span>Portrait-first review cut with source, metadata, and render trail preserved.</span>
           </div>
-          <button className="button" type="button" onClick={startWorkflow} disabled={busy || !assetId}>
-            <Video size={16} /> Export review cut
+          <button className="button" type="button" onClick={startWorkflow} disabled={busy || !workflowReady}>
+            {stageAction.icon} {stageAction.label}
           </button>
           {latestJob ? (
             <Link className="button secondary" href={`/jobs/${latestJob.id}`}>
@@ -518,9 +551,12 @@ export function VideoClippingForm() {
         </Panel>
 
         <Panel title="Split Settings">
-          <div className="field">
-            <label htmlFor="asset">Selected source asset ID</label>
-            <input id="asset" value={assetId} onChange={(event) => setAssetId(event.target.value)} />
+          <div className={workflowReady ? "readiness-card ready" : "readiness-card"}>
+            <CheckSquare size={18} />
+            <span>
+              <strong>{workflowReady ? "Source selected" : "Select a source to continue"}</strong>
+              <small>{selectedAsset?.filename || "Pick an owned video from Workspace Sources."}</small>
+            </span>
           </div>
           <div className="field-grid compact-grid">
             <div className="field">
@@ -543,8 +579,15 @@ export function VideoClippingForm() {
               </select>
             </div>
           </div>
-          <button className="button" type="button" onClick={startWorkflow} disabled={busy || !assetId}>
-            <PlayCircle size={16} /> Start analysis workflow
+          <details className="technical-details">
+            <summary>Asset details</summary>
+            <div className="field">
+              <label htmlFor="asset">Selected source asset ID</label>
+              <input id="asset" value={assetId} onChange={(event) => setAssetId(event.target.value)} />
+            </div>
+          </details>
+          <button className="button" type="button" onClick={startWorkflow} disabled={busy || !workflowReady}>
+            <WandSparkles size={16} /> Analyze source
           </button>
           {message ? <p className="muted code">{message}</p> : null}
         </Panel>
@@ -562,7 +605,7 @@ export function VideoClippingForm() {
                 <span className="timecode">{scene.timecode}</span>
                 <span>
                   <strong>{scene.title}</strong>
-                  <small>{scene.speaker} - {scene.summary}</small>
+                  <small>{scene.speaker} - {scene.range} - {scene.summary}</small>
                 </span>
                 <strong className="signal-score">{scene.score}</strong>
               </div>
@@ -588,8 +631,8 @@ export function VideoClippingForm() {
               <input id="metadata-output-prefix" value={outputPrefix} onChange={(event) => setOutputPrefix(event.target.value)} />
             </div>
           </div>
-          <button className="button" type="button" onClick={startWorkflow} disabled={busy || !assetId}>
-            <WandSparkles size={16} /> Generate scene intelligence
+          <button className="button" type="button" onClick={startWorkflow} disabled={busy || !workflowReady}>
+            <Scissors size={16} /> Create candidate cut
           </button>
           {metadataAssets.length ? <AssetTable assets={metadataAssets} emptyLabel="No metadata JSON has been generated yet." /> : null}
         </Panel>
@@ -604,7 +647,10 @@ export function VideoClippingForm() {
           <div className="clip-candidate-grid">
             {clipCandidates.map((candidate) => (
               <article className="clip-candidate-card" key={candidate.title}>
-                <div className="clip-thumb" />
+                <div className="clip-thumb">
+                  <PlayCircle size={22} />
+                  <span>{candidate.range}</span>
+                </div>
                 <div className="clip-candidate-body">
                   <div className="chip-row">
                     <span className="chip signal">{candidate.score} score</span>
@@ -615,8 +661,8 @@ export function VideoClippingForm() {
                   <p>Why this clip: {candidate.reason}</p>
                   <div className="actions">
                     <button className="button secondary" type="button">Preview</button>
-                    <button className="button" type="button" disabled title="Clip-stage endpoint required">
-                      Add to storyboard
+                    <button className="button secondary" type="button" disabled title="Clip-stage endpoint required">
+                      Selected
                     </button>
                   </div>
                 </div>
@@ -628,7 +674,7 @@ export function VideoClippingForm() {
         <Panel title="Selected Clip Assets">
           <AssetTable assets={clipAssets} emptyLabel="Clip assets will appear after clip generation." />
           <button className="button" type="button" disabled title="Clip-stage endpoint required">
-            <Scissors size={16} /> Generate selected clips
+            <Scissors size={16} /> Render selected clips
           </button>
         </Panel>
       </div>
@@ -649,7 +695,7 @@ export function VideoClippingForm() {
           </div>
           <AssetTable assets={clipAssets} emptyLabel="Clip assets will appear after manual clip generation." />
           <button className="button" type="button" disabled title="Join-stage endpoint required">
-            <ListChecks size={16} /> Join selected clips
+            <ListChecks size={16} /> Assemble storyboard
           </button>
         </Panel>
 
@@ -682,8 +728,8 @@ export function VideoClippingForm() {
             <button className="button" type="button" disabled title="AI-plan endpoint required">
               <Bot size={16} /> Generate AI plan
             </button>
-            <button className="button secondary" type="button" onClick={startWorkflow} disabled={busy || !assetId}>
-              <PlayCircle size={16} /> Run current cut
+            <button className="button secondary" type="button" onClick={startWorkflow} disabled={busy || !workflowReady}>
+              <Video size={16} /> Export review cut
             </button>
           </div>
         </Panel>
@@ -691,12 +737,20 @@ export function VideoClippingForm() {
         <Panel title="Export Provenance">
           <AssetTable assets={finalVideoAssets.length ? finalVideoAssets : metadataAssets} emptyLabel="Final exports and metadata will appear here." />
           <div className="approval-card">
-            <strong>Approval trail</strong>
-            <span>{"Source video > scene intelligence > reviewed storyboard > final render"}</span>
+            <strong>{latestFinalVideo ? "Final video ready" : "Approval trail"}</strong>
+            <span>{latestFinalVideo?.filename || "Source video > scene intelligence > reviewed storyboard > final render"}</span>
           </div>
         </Panel>
       </div>
     );
+  }
+
+  function getStageAction() {
+    if (activeStage === "split") return { label: "Analyze source", icon: <WandSparkles size={16} /> };
+    if (activeStage === "metadata") return { label: "Create candidate cut", icon: <Scissors size={16} /> };
+    if (activeStage === "clips") return { label: "Render selected clips", icon: <Scissors size={16} /> };
+    if (activeStage === "joining") return { label: "Assemble review cut", icon: <ListChecks size={16} /> };
+    return { label: "Export review cut", icon: <Video size={16} /> };
   }
 
   function Panel({ title, children }: { title: string; children: React.ReactNode }) {

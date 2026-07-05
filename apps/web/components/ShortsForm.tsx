@@ -257,9 +257,11 @@ export function ShortsForm() {
                 key={step.title}
                 onClick={() => setActiveStep(index)}
               >
-                <span className="wizard-step-number">{index + 1}</span>
-                <Icon size={17} />
-                <span>
+                <span className="wizard-step-index" aria-hidden="true">
+                  <span className="wizard-step-number">{index + 1}</span>
+                  <Icon size={17} />
+                </span>
+                <span className="wizard-step-copy">
                   <strong>{step.title}</strong>
                   <small>{step.detail}</small>
                 </span>
@@ -501,7 +503,15 @@ export function ShortsForm() {
           </div>
           <div className="pipeline-list">
             {pipelineSteps.map((step, index) => (
-              <button className="pipeline-step" type="button" key={step.title} onClick={() => showLatestJobStatus(step.title)} disabled={!latestJob}>
+              <button
+                className={`pipeline-step${activeStep === index ? " active" : ""}${index < activeStep ? " complete" : ""}`}
+                type="button"
+                key={step.title}
+                onClick={() => {
+                  setActiveStep(index);
+                  showLatestJobStatus(step.title);
+                }}
+              >
                 <span className="step-number">{index + 1}</span>
                 <span>{step.title}</span>
                 {latestJob ? <StatusPill status={latestJob.status} /> : null}

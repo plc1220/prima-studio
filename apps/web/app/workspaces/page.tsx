@@ -186,25 +186,29 @@ export default function WorkspacesPage() {
           <h1>Production command center</h1>
           <p className="muted">Find a workspace, check lane activity, and jump directly into the matching production tool.</p>
         </div>
-        <div className="hero-actions">
-          <div className="hero-stat">
-            <strong>{rows.length}</strong>
-            <span>Workspaces</span>
+        <div className="hero-panel" aria-label="Workspace summary">
+          <div className="hero-toolbar">
+            <button className="button secondary" onClick={() => setShowCreate((current) => !current)}>
+              <Plus size={16} /> Create workspace
+            </button>
+            <button className="button secondary" onClick={refresh}>
+              <RefreshCw size={16} /> Refresh
+            </button>
           </div>
-          <div className="hero-stat">
-            <strong>{taggedCount}</strong>
-            <span>Tagged</span>
+          <div className="hero-stats">
+            <div className="hero-stat">
+              <strong>{rows.length}</strong>
+              <span>Workspaces</span>
+            </div>
+            <div className="hero-stat">
+              <strong>{taggedCount}</strong>
+              <span>Tagged</span>
+            </div>
+            <div className="hero-stat">
+              <strong>{recentJobs}</strong>
+              <span>Recent jobs</span>
+            </div>
           </div>
-          <div className="hero-stat">
-            <strong>{recentJobs}</strong>
-            <span>Recent jobs</span>
-          </div>
-          <button className="icon-button" onClick={() => setShowCreate((current) => !current)} aria-label="Create workspace" title="Create workspace">
-            <Plus size={18} />
-          </button>
-          <button className="icon-button hero-refresh" onClick={refresh} aria-label="Refresh workspaces" title="Refresh workspaces">
-            <RefreshCw size={18} />
-          </button>
         </div>
       </section>
 

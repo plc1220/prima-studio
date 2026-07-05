@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import { Layers } from "lucide-react";
+import { Film, Layers, Newspaper, WandSparkles } from "lucide-react";
+import "@astryxdesign/core/reset.css";
+import "@astryxdesign/theme-neutral/theme.css";
+import "@astryxdesign/core/astryx.css";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -25,12 +28,19 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
               <Link href="/workspaces">
                 <Layers size={18} /> Workspaces
               </Link>
+              <Link href="/newsroom">
+                <Newspaper size={18} /> Newsroom
+              </Link>
+              <Link href="/video-clipping">
+                <Film size={18} /> Video Clipping
+              </Link>
+              <Link href="/shorts">
+                <WandSparkles size={18} /> Shorts Generator
+              </Link>
             </nav>
-            {process.env.NODE_ENV !== "production" ? (
-              <div className="api-pill">
-                API: {process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080"}
-              </div>
-            ) : null}
+            <div className="api-pill">
+              API: {process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080"}
+            </div>
           </header>
           <main className="main">{children}</main>
         </div>

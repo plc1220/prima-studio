@@ -1,0 +1,876 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Prima Studio Design Preview</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;700&family=Source+Sans+3:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f5f3ef;
+      --panel: #ffffff;
+      --panel-soft: #ece8df;
+      --panel-warm: #faf8f3;
+      --ink: #151515;
+      --text: #25221f;
+      --muted: #6e6a63;
+      --line: #d8d2c7;
+      --primary: #e3262e;
+      --primary-strong: #b91c24;
+      --secondary: #0e7c86;
+      --success: #2f855a;
+      --warning: #b7791f;
+      --error: #c53030;
+      --info: #2563a6;
+      --shadow: 0 20px 60px rgba(21, 21, 21, 0.10);
+    }
+
+    body.dark {
+      color-scheme: dark;
+      --bg: #0e0e0d;
+      --panel: #181715;
+      --panel-soft: #24221e;
+      --panel-warm: #1d1b18;
+      --ink: #f6f1e8;
+      --text: #f6f1e8;
+      --muted: #aaa195;
+      --line: #3a352e;
+      --primary: #f0444b;
+      --primary-strong: #ff6268;
+      --secondary: #23a6ae;
+      --shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background:
+        linear-gradient(90deg, rgba(21,21,21,0.035) 1px, transparent 1px),
+        linear-gradient(180deg, rgba(21,21,21,0.03) 1px, transparent 1px),
+        var(--bg);
+      background-size: 32px 32px;
+      color: var(--text);
+      font-family: "Source Sans 3", system-ui, sans-serif;
+      font-size: 15px;
+      line-height: 1.5;
+    }
+
+    button, input, select, textarea { font: inherit; }
+    button { cursor: pointer; }
+    a { color: inherit; text-decoration: none; }
+    h1, h2, h3, p { margin: 0; }
+
+    .page {
+      width: min(1520px, calc(100% - 40px));
+      margin: 0 auto;
+      padding: 28px 0 64px;
+    }
+
+    .hero {
+      min-height: 520px;
+      display: grid;
+      grid-template-columns: minmax(320px, 0.55fr) minmax(760px, 1.45fr);
+      gap: 24px;
+      align-items: stretch;
+      padding: 18px;
+      background: var(--ink);
+      color: #f6f1e8;
+      border: 1px solid rgba(255,255,255,0.14);
+      box-shadow: var(--shadow);
+    }
+
+    body.dark .hero { border-color: var(--line); }
+
+    .hero-copy {
+      padding: 34px;
+      display: grid;
+      align-content: space-between;
+      gap: 28px;
+      background:
+        linear-gradient(135deg, rgba(227,38,46,0.22), transparent 42%),
+        linear-gradient(180deg, rgba(255,255,255,0.06), transparent);
+      border: 1px solid rgba(255,255,255,0.12);
+    }
+
+    .kicker {
+      color: var(--primary);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    .hero h1 {
+      margin-top: 16px;
+      font-family: "Instrument Serif", Georgia, serif;
+      font-size: clamp(48px, 5.4vw, 84px);
+      line-height: .92;
+      font-weight: 400;
+      letter-spacing: 0;
+      max-width: 720px;
+    }
+
+    .hero p {
+      max-width: 580px;
+      color: #d8d0c4;
+      font-size: 18px;
+      margin-top: 18px;
+    }
+
+    .hero-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .button {
+      min-height: 40px;
+      border: 0;
+      border-radius: 6px;
+      background: var(--primary);
+      color: #fff;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 10px 14px;
+      font-weight: 800;
+    }
+
+    .button:hover { background: var(--primary-strong); }
+
+    .button.secondary {
+      background: transparent;
+      color: inherit;
+      border: 1px solid currentColor;
+    }
+
+    .button.ghost {
+      background: transparent;
+      color: var(--text);
+      border: 1px solid var(--line);
+    }
+
+    .button.signal { background: var(--secondary); }
+
+    .workstation {
+      background: var(--panel);
+      color: var(--text);
+      border: 1px solid var(--line);
+      display: grid;
+      grid-template-columns: 132px minmax(420px, 1fr) 220px;
+      min-height: 480px;
+      overflow: hidden;
+    }
+
+    .rail {
+      background: var(--panel-soft);
+      border-right: 1px solid var(--line);
+      padding: 14px;
+      display: grid;
+      align-content: start;
+      gap: 10px;
+    }
+
+    .rail .brand {
+      font-weight: 900;
+      color: var(--ink);
+      margin-bottom: 8px;
+    }
+
+    .stage {
+      min-height: 54px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      color: var(--muted);
+      padding: 8px;
+      display: grid;
+      gap: 2px;
+      border-radius: 6px;
+    }
+
+    .stage strong {
+      color: var(--text);
+      font-size: 13px;
+    }
+
+    .stage small { font-size: 11px; }
+    .stage.active {
+      border-color: var(--primary);
+      box-shadow: inset 3px 0 0 var(--primary);
+    }
+
+    .review {
+      padding: 16px;
+      display: grid;
+      grid-template-rows: auto auto 1fr;
+      gap: 14px;
+      min-width: 0;
+    }
+
+    .review-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: start;
+    }
+
+    .review-header h2 {
+      font-size: 22px;
+      line-height: 1.1;
+    }
+
+    .timecode {
+      font-family: "JetBrains Mono", monospace;
+      color: var(--secondary);
+      font-weight: 700;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .player {
+      min-height: 210px;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.05), rgba(0,0,0,0.32)),
+        #1d1d1b;
+      border: 1px solid #000;
+      border-radius: 8px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .player::before {
+      content: "";
+      position: absolute;
+      inset: 18px;
+      border: 1px solid rgba(255,255,255,0.14);
+    }
+
+    .playhead {
+      position: absolute;
+      left: 22px;
+      right: 22px;
+      bottom: 24px;
+      height: 7px;
+      background: rgba(255,255,255,0.18);
+      border-radius: 999px;
+    }
+
+    .playhead span {
+      display: block;
+      width: 44%;
+      height: 100%;
+      background: var(--primary);
+      border-radius: inherit;
+    }
+
+    .scene-grid {
+      display: grid;
+      grid-template-columns: 1.1fr .9fr;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px;
+      display: grid;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .panel h3 {
+      font-size: 15px;
+      line-height: 1.2;
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .scene-row {
+      display: grid;
+      grid-template-columns: 86px minmax(0, 1fr) 56px;
+      gap: 10px;
+      align-items: start;
+      padding: 10px 0;
+      border-top: 1px solid var(--line);
+    }
+
+    .scene-row:first-of-type { border-top: 0; }
+    .scene-row strong { font-size: 13px; line-height: 1.25; }
+    .scene-row small {
+      display: block;
+      color: var(--muted);
+      margin-top: 3px;
+      line-height: 1.35;
+    }
+
+    .score {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 12px;
+      color: var(--secondary);
+      text-align: right;
+    }
+
+    .candidate {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      background: var(--panel-warm);
+    }
+
+    .thumb {
+      height: 72px;
+      background:
+        linear-gradient(135deg, rgba(227,38,46,0.28), transparent),
+        linear-gradient(180deg, rgba(255,255,255,0.05), rgba(0,0,0,0.38)),
+        #20201e;
+    }
+
+    .candidate-body {
+      padding: 10px;
+      display: grid;
+      gap: 7px;
+    }
+
+    .candidate h4 {
+      margin: 0;
+      font-size: 14px;
+      line-height: 1.25;
+    }
+
+    .candidate p {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .chip-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .chip {
+      border: 1px solid var(--line);
+      color: var(--muted);
+      background: var(--panel);
+      border-radius: 999px;
+      padding: 3px 7px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .chip.signal {
+      color: var(--secondary);
+      border-color: color-mix(in srgb, var(--secondary), var(--line) 55%);
+    }
+
+    .assembly {
+      border-left: 1px solid var(--line);
+      background: var(--panel-warm);
+      padding: 14px;
+      display: grid;
+      align-content: start;
+      gap: 12px;
+    }
+
+    .story-card {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 8px;
+      padding: 10px;
+      display: grid;
+      gap: 3px;
+    }
+
+    .story-card strong {
+      font-size: 13px;
+      line-height: 1.25;
+    }
+
+    .story-card small {
+      color: var(--muted);
+      font-family: "JetBrains Mono", monospace;
+      font-size: 11px;
+    }
+
+    .section {
+      margin-top: 28px;
+      display: grid;
+      gap: 16px;
+    }
+
+    .section-heading {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 16px;
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 12px;
+    }
+
+    .section-heading h2 {
+      font-family: "Instrument Serif", Georgia, serif;
+      font-size: 42px;
+      font-weight: 400;
+      line-height: 1;
+    }
+
+    .section-heading p {
+      max-width: 640px;
+      color: var(--muted);
+    }
+
+    .specimen-grid,
+    .palette-grid,
+    .component-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .specimen,
+    .swatch,
+    .component-card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+      min-width: 0;
+    }
+
+    .specimen .display {
+      font-family: "Instrument Serif", Georgia, serif;
+      font-size: 46px;
+      line-height: .96;
+      margin: 8px 0 10px;
+    }
+
+    .specimen .body-sample { font-size: 15px; color: var(--muted); }
+    .mono { font-family: "JetBrains Mono", monospace; }
+
+    .swatch {
+      min-height: 128px;
+      display: grid;
+      align-content: space-between;
+    }
+
+    .swatch strong,
+    .swatch span {
+      position: relative;
+      z-index: 1;
+    }
+
+    .swatch span {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 12px;
+    }
+
+    .primary { background: #e3262e; color: #fff; }
+    .secondary-swatch { background: #0e7c86; color: #fff; }
+    .ink-swatch { background: #151515; color: #f6f1e8; }
+    .paper-swatch { background: #f5f3ef; color: #151515; }
+    .success-swatch { background: #2f855a; color: #fff; }
+    .warning-swatch { background: #b7791f; color: #fff; }
+
+    .form-sample {
+      display: grid;
+      gap: 10px;
+    }
+
+    .field {
+      display: grid;
+      gap: 5px;
+    }
+
+    .field label {
+      font-weight: 800;
+      font-size: 12px;
+    }
+
+    .field input,
+    .field select {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--panel);
+      color: var(--text);
+      padding: 9px 10px;
+      width: 100%;
+    }
+
+    .alert {
+      border: 1px solid var(--line);
+      border-left: 4px solid var(--info);
+      background: var(--panel-warm);
+      padding: 10px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .alert.success { border-left-color: var(--success); }
+    .alert.warning { border-left-color: var(--warning); }
+    .alert.error { border-left-color: var(--error); }
+
+    .dashboard {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      display: grid;
+      grid-template-columns: 220px minmax(0, 1fr);
+      min-height: 500px;
+    }
+
+    .dash-nav {
+      background: var(--ink);
+      color: #f6f1e8;
+      padding: 16px;
+      display: grid;
+      align-content: start;
+      gap: 8px;
+    }
+
+    .dash-nav strong {
+      margin-bottom: 12px;
+      display: block;
+    }
+
+    .dash-nav span {
+      padding: 9px 10px;
+      border-radius: 6px;
+      color: #d8d0c4;
+    }
+
+    .dash-nav span.active {
+      background: rgba(227,38,46,.18);
+      color: #fff;
+      box-shadow: inset 3px 0 0 var(--primary);
+    }
+
+    .dash-main {
+      padding: 18px;
+      display: grid;
+      gap: 14px;
+      align-content: start;
+    }
+
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .metric {
+      background: var(--panel-warm);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+    }
+
+    .metric span {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+
+    .metric strong {
+      display: block;
+      margin-top: 4px;
+      font-size: 28px;
+      line-height: 1;
+      font-family: "JetBrains Mono", monospace;
+    }
+
+    .data-table {
+      border: 1px solid var(--line);
+      overflow: hidden;
+      border-radius: 8px;
+    }
+
+    .data-row {
+      display: grid;
+      grid-template-columns: 130px minmax(0, 1fr) 90px 90px;
+      gap: 10px;
+      padding: 10px 12px;
+      border-top: 1px solid var(--line);
+      align-items: center;
+      font-size: 13px;
+    }
+
+    .data-row:first-child {
+      border-top: 0;
+      background: var(--panel-soft);
+      color: var(--muted);
+      font-weight: 800;
+      font-size: 12px;
+    }
+
+    .toggle {
+      position: fixed;
+      right: 24px;
+      top: 24px;
+      z-index: 20;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      color: var(--text);
+      border-radius: 999px;
+      padding: 10px 14px;
+      font-weight: 800;
+      box-shadow: var(--shadow);
+    }
+
+    @media (max-width: 1100px) {
+      .hero,
+      .workstation,
+      .dashboard {
+        grid-template-columns: 1fr;
+      }
+      .assembly,
+      .rail {
+        border-left: 0;
+        border-right: 0;
+      }
+      .specimen-grid,
+      .palette-grid,
+      .component-grid,
+      .metric-grid,
+      .scene-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 720px) {
+      .page { width: min(100% - 24px, 1520px); padding-top: 12px; }
+      .hero-copy { padding: 22px; }
+      .section-heading { display: grid; }
+      .data-row { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <button class="toggle" type="button" onclick="document.body.classList.toggle('dark')">Toggle mode</button>
+  <main class="page">
+    <section class="hero">
+      <div class="hero-copy">
+        <div>
+          <div class="kicker">Prima Studio design system</div>
+          <h1>AI video work that feels like a production desk.</h1>
+          <p>Industrial Editorial gives Prima Studio the density of an operations tool, the confidence of a newsroom, and the trust cues needed for AI-assisted video review.</p>
+        </div>
+        <div class="hero-actions">
+          <a class="button" href="#workstation">Review clipping mockup</a>
+          <a class="button secondary" href="#system">View system</a>
+        </div>
+      </div>
+
+      <div class="workstation" id="workstation">
+        <aside class="rail">
+          <div class="brand">Prima Studio</div>
+          <div class="stage"><strong>Ingest</strong><small>Source footage</small></div>
+          <div class="stage active"><strong>Analyze</strong><small>Scene intelligence</small></div>
+          <div class="stage"><strong>Select</strong><small>Candidate clips</small></div>
+          <div class="stage"><strong>Assemble</strong><small>Storyboard cut</small></div>
+          <div class="stage"><strong>Export</strong><small>Final package</small></div>
+        </aside>
+
+        <section class="review">
+          <div class="review-header">
+            <div>
+              <div class="kicker">Video Clipping Lane</div>
+              <h2>Owned footage to reviewable social cuts</h2>
+            </div>
+            <div class="timecode">00:01:12:04</div>
+          </div>
+
+          <div class="player">
+            <div class="playhead"><span></span></div>
+          </div>
+
+          <div class="scene-grid">
+            <div class="panel">
+              <h3>Scene Intelligence <span class="chip signal">Gemini reviewed</span></h3>
+              <div class="scene-row">
+                <span class="timecode">00:00:08</span>
+                <span><strong>Doctor sets the concern</strong><small>Clear setup, strong context, useful as the opening beat.</small></span>
+                <span class="score">82</span>
+              </div>
+              <div class="scene-row">
+                <span class="timecode">00:01:12</span>
+                <span><strong>Practical next step explained</strong><small>Best candidate for short-form clarity and trust.</small></span>
+                <span class="score">91</span>
+              </div>
+              <div class="scene-row">
+                <span class="timecode">00:02:03</span>
+                <span><strong>Patient reaction beat</strong><small>Useful transition into emotional payoff.</small></span>
+                <span class="score">74</span>
+              </div>
+            </div>
+
+            <div class="panel">
+              <h3>Clip Candidates <span class="chip">9:16</span></h3>
+              <div class="candidate">
+                <div class="thumb"></div>
+                <div class="candidate-body">
+                  <div class="chip-row">
+                    <span class="chip signal">0:26</span>
+                    <span class="chip">Hook</span>
+                    <span class="chip">Malay</span>
+                  </div>
+                  <h4>Key explanation for digital audience</h4>
+                  <p>Why this clip: concise explanation, clean speaker focus, low setup cost.</p>
+                  <button class="button signal" type="button">Add to storyboard</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <aside class="assembly">
+          <div>
+            <div class="kicker">Assemble</div>
+            <h3>Storyboard</h3>
+          </div>
+          <div class="story-card"><strong>1. Hook</strong><small>00:00:08 - 00:00:24</small></div>
+          <div class="story-card"><strong>2. Explanation</strong><small>00:01:12 - 00:01:38</small></div>
+          <div class="story-card"><strong>3. Reaction</strong><small>00:02:03 - 00:02:19</small></div>
+          <div class="alert success">Total duration: 58s. Fits TikTok, Reels, and Shorts export.</div>
+          <button class="button" type="button">Export review cut</button>
+        </aside>
+      </div>
+    </section>
+
+    <section class="section" id="system">
+      <div class="section-heading">
+        <h2>Typography</h2>
+        <p>Instrument Serif gives the product editorial presence. Source Sans 3 carries dense UI text. JetBrains Mono makes timecodes, IDs, and provenance unmistakable.</p>
+      </div>
+      <div class="specimen-grid">
+        <div class="specimen">
+          <div class="kicker">Display</div>
+          <div class="display">Scene intelligence, not file management.</div>
+          <p class="body-sample">Use for big page titles, overview moments, and editorial emphasis.</p>
+        </div>
+        <div class="specimen">
+          <div class="kicker">Body and UI</div>
+          <h3>Review candidate clips before render</h3>
+          <p class="body-sample">Source Sans 3 stays readable when the interface is dense with labels, controls, and status messages.</p>
+          <button class="button" type="button">Approve plan</button>
+        </div>
+        <div class="specimen">
+          <div class="kicker">Data</div>
+          <p class="mono">00:01:12:04 -> 00:01:38:20</p>
+          <p class="mono">JOB vc_20260702_1432</p>
+          <p class="body-sample">Use for timestamps, IDs, filenames, and provenance trails.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-heading">
+        <h2>Color</h2>
+        <p>Warm workstation neutrals keep the product calm. Media Prima red marks decisive action. Teal marks AI signal and recommendation quality.</p>
+      </div>
+      <div class="palette-grid">
+        <div class="swatch primary"><strong>Media Prima Red</strong><span>#E3262E</span></div>
+        <div class="swatch secondary-swatch"><strong>Signal Teal</strong><span>#0E7C86</span></div>
+        <div class="swatch ink-swatch"><strong>Ink</strong><span>#151515</span></div>
+        <div class="swatch paper-swatch"><strong>Warm Surface</strong><span>#F5F3EF</span></div>
+        <div class="swatch success-swatch"><strong>Success</strong><span>#2F855A</span></div>
+        <div class="swatch warning-swatch"><strong>Warning</strong><span>#B7791F</span></div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-heading">
+        <h2>Components</h2>
+        <p>The component language is compact, operational, and review-oriented. The UI should help users make decisions fast without hiding provenance.</p>
+      </div>
+      <div class="component-grid">
+        <div class="component-card form-sample">
+          <h3>Controls</h3>
+          <div class="field">
+            <label for="language">Output language</label>
+            <select id="language"><option>Malay</option><option>English</option></select>
+          </div>
+          <div class="field">
+            <label for="prefix">Export preset</label>
+            <input id="prefix" value="9:16 social review cut" />
+          </div>
+          <div class="hero-actions">
+            <button class="button" type="button">Generate</button>
+            <button class="button ghost" type="button">Inspect</button>
+          </div>
+        </div>
+        <div class="component-card form-sample">
+          <h3>Status</h3>
+          <div class="alert">Info: metadata pass completed with 12 candidate moments.</div>
+          <div class="alert success">Success: final render is ready for review.</div>
+          <div class="alert warning">Warning: source audio confidence is low.</div>
+          <div class="alert error">Error: render worker returned an FFmpeg failure.</div>
+        </div>
+        <div class="component-card form-sample">
+          <h3>Clip Card</h3>
+          <div class="candidate">
+            <div class="thumb"></div>
+            <div class="candidate-body">
+              <div class="chip-row"><span class="chip signal">91 score</span><span class="chip">Doctor</span></div>
+              <h4>Concise treatment explanation</h4>
+              <p>Source: consultation-demo.mp4 at 00:01:12.</p>
+              <button class="button signal" type="button">Preview</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-heading">
+        <h2>Operational Dashboard</h2>
+        <p>A second mockup shows how the same system handles job status, workspace health, and asset traceability without becoming a generic admin page.</p>
+      </div>
+      <div class="dashboard">
+        <nav class="dash-nav">
+          <strong>Prima Studio</strong>
+          <span>Workspaces</span>
+          <span class="active">Video Clipping</span>
+          <span>Newsroom</span>
+          <span>Shorts</span>
+          <span>Jobs</span>
+        </nav>
+        <section class="dash-main">
+          <div class="review-header">
+            <div>
+              <div class="kicker">Workspace health</div>
+              <h2>media-prima-video-clipping</h2>
+            </div>
+            <button class="button ghost" type="button">Sync bucket</button>
+          </div>
+          <div class="metric-grid">
+            <div class="metric"><span>Sources</span><strong>18</strong></div>
+            <div class="metric"><span>Segments</span><strong>124</strong></div>
+            <div class="metric"><span>Clips</span><strong>37</strong></div>
+            <div class="metric"><span>Finals</span><strong>6</strong></div>
+          </div>
+          <div class="data-table">
+            <div class="data-row"><span>Job</span><span>Output</span><span>Status</span><span>Created</span></div>
+            <div class="data-row"><span class="mono">vc_1432</span><span>Consultation highlights 9:16</span><span class="chip signal">running</span><span class="mono">14:32</span></div>
+            <div class="data-row"><span class="mono">vc_1418</span><span>Patient story review cut</span><span class="chip">ready</span><span class="mono">14:18</span></div>
+            <div class="data-row"><span class="mono">vc_1351</span><span>Clinic explainer export</span><span class="chip">ready</span><span class="mono">13:51</span></div>
+          </div>
+        </section>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

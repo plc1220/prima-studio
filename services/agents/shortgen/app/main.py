@@ -3,6 +3,7 @@ import logging
 from pathlib import Path
 from uuid import UUID
 
+from mpstudio.audio import synthesize_voiceover_audio
 from mpstudio.contracts import AssetKind, AgentTaskKind, AgentTaskPayload, EventPayload, JobStatus, StepName
 from mpstudio.database import session_scope
 from mpstudio.media import create_demo_mp4, render_timeline_mp4
@@ -23,10 +24,14 @@ def handle_shortgen(payload: AgentTaskPayload) -> None:
     scratch.mkdir(parents=True, exist_ok=True)
 
     prompt = str(payload.params.get("prompt", "Media Prima social short"))
-    voice_name = str(payload.params.get("voice_name", "ms-MY-YasminNeural"))
+    voice_name = str(payload.params.get("voice_name", "ms-MY-Standard-A"))
     duration_seconds = int(payload.params.get("duration_seconds", 30))
     script_override = payload.params.get("script")
     search_terms_override = payload.params.get("search_terms")
+    video_source = str(payload.params.get("video_source", "stock"))
+    enable_subtitles = bool(payload.params.get("enable_subtitles", True))
+    enable_dubbing = bool(payload.params.get("enable_dubbing", True))
+    tts_server = str(payload.params.get("tts_server", "gcp"))
 
     plan = build_shorts_plan(
         workspace_id=payload.workspace_id,
@@ -38,15 +43,43 @@ def handle_shortgen(payload: AgentTaskPayload) -> None:
         output_prefix=payload.output_prefix,
         script=str(script_override) if script_override else None,
         search_terms=search_terms_override if isinstance(search_terms_override, list) else None,
+        video_source=video_source,
+        max_clip_duration_seconds=int(payload.params.get("max_clip_duration_seconds", 5)),
+        generated_video_count=int(payload.params.get("generated_video_count", 1)),
     )
+    subtitle_settings = {
+        "enabled": enable_subtitles,
+        "font": str(payload.params.get("subtitle_font", "DejaVuSans-Bold.ttf")),
+        "position": str(payload.params.get("subtitle_position", "bottom")),
+        "font_color": str(payload.params.get("subtitle_font_color", "#ffffff")),
+        "font_size": int(payload.params.get("subtitle_font_size", 60)),
+        "outline_color": str(payload.params.get("subtitle_outline_color", "#000000")),
+        "outline_width": float(payload.params.get("subtitle_outline_width", 1.5)),
+    }
+    dubbing_settings = {
+        "enabled": enable_dubbing,
+        "tts_server": tts_server,
+        "voice_name": voice_name,
+        "speech_volume": float(payload.params.get("speech_volume", 1.0)),
+        "speech_rate": float(payload.params.get("speech_rate", 1.0)),
+        "background_music": str(payload.params.get("background_music", "none")),
+        "background_music_volume": float(payload.params.get("background_music_volume", 0.2)),
+    }
     script = {
         "prompt": prompt,
         "language": payload.language,
         "voice_name": voice_name,
+        "video_source": video_source,
+        "video_concat_mode": payload.params.get("video_concat_mode", "random"),
+        "video_transition_mode": payload.params.get("video_transition_mode", "none"),
+        "max_clip_duration_seconds": payload.params.get("max_clip_duration_seconds", 5),
+        "generated_video_count": payload.params.get("generated_video_count", 1),
         "script": plan.script,
         "search_terms": plan.search_terms,
         "stock_asset_uris": plan.stock_asset_uris,
         "timeline": [clip.__dict__ for clip in plan.timeline],
+        "subtitle_settings": subtitle_settings,
+        "dubbing_settings": dubbing_settings,
         "source": "Newsroom Generator handoff"
         if payload.params.get("source_newsroom_job_id")
         else "Prima Studio shorts planner",
@@ -63,9 +96,27 @@ def handle_shortgen(payload: AgentTaskPayload) -> None:
     video_filename = f"{payload.job_id}-generated-short.mp4"
     video_uri = storage.build_uri(payload.workspace_id, payload.output_prefix, video_filename)
     renderer = TranscoderRenderer()
-    transcode_metadata: dict[str, str] = {}
+    transcode_metadata: dict[str, str] = {"video_source": video_source}
     used_transcoder = False
-    if renderer.enabled and plan.timeline:
+    voiceover_path: Path | None = None
+    if enable_dubbing:
+        try:
+            voiceover_path = synthesize_voiceover_audio(
+                text=plan.script,
+                voice_name=voice_name,
+                language=payload.language,
+                output_path=scratch / f"{payload.job_id}-voiceover.mp3",
+                speech_rate=dubbing_settings["speech_rate"],
+                speech_volume=dubbing_settings["speech_volume"],
+                tts_server=tts_server,
+            )
+            if voiceover_path:
+                transcode_metadata["dubbing_backend"] = tts_server
+        except Exception as exc:
+            transcode_metadata["dubbing_error"] = str(exc)
+
+    needs_local_composite = enable_subtitles or voiceover_path is not None
+    if renderer.enabled and plan.timeline and not needs_local_composite:
         try:
             submitted = renderer.create_concat_job(
                 clips=plan.timeline,
@@ -125,11 +176,16 @@ def handle_shortgen(payload: AgentTaskPayload) -> None:
                 clips=plan.timeline,
                 output_path=local_video,
                 aspect_ratio=str(payload.aspect_ratio),
+                audio_path=voiceover_path,
+                subtitle_text=plan.script if enable_subtitles else "",
+                subtitle_options=subtitle_settings,
             )
             storage.copy_file(local_video, video_uri, "video/mp4")
             used_transcoder = True
             transcode_metadata["render_backend"] = "local_ffmpeg_stock"
             transcode_metadata["stock_asset_count"] = str(len(plan.stock_asset_uris))
+            if enable_subtitles:
+                transcode_metadata["subtitles"] = "burned_in"
         except Exception as exc:
             transcode_metadata["local_render_error"] = str(exc)
 
@@ -137,11 +193,18 @@ def handle_shortgen(payload: AgentTaskPayload) -> None:
         local_video = scratch / video_filename
         create_demo_mp4(
             local_video,
-            title="Media Prima Generated Short",
+            title=prompt,
             duration_seconds=max(3, min(duration_seconds, 10)),
+            audio_path=voiceover_path,
+            subtitle_text=plan.script if enable_subtitles else "",
+            subtitle_options=subtitle_settings,
         )
         storage.copy_file(local_video, video_uri, "video/mp4")
         transcode_metadata.setdefault("render_backend", "local_demo_fallback")
+        if enable_subtitles:
+            transcode_metadata["subtitles"] = "burned_in"
+        if voiceover_path:
+            transcode_metadata.setdefault("dubbing_backend", tts_server)
     else:
         transcode_metadata.setdefault("render_backend", "gcp_transcoder")
 

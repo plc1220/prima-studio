@@ -18,5 +18,6 @@ terraform.tfstate*
 local-data/
 tmp/
 external/
+sample/*.mp4
 
 .gstack/

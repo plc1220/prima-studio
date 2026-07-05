@@ -1,5 +1,6 @@
 import json
 import re
+import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -43,17 +44,37 @@ def build_shorts_plan(
     output_prefix: str,
     script: str | None = None,
     search_terms: list[str] | None = None,
+    video_source: str = "stock",
+    max_clip_duration_seconds: int = 5,
+    generated_video_count: int = 1,
 ) -> ShortsPlan:
     final_script = script.strip() if script and script.strip() else generate_script_with_vertex(prompt, language)
     terms = _clean_terms(search_terms) or generate_search_terms_with_vertex(prompt, final_script, language)
-    stock_videos = search_stock_videos(terms, aspect_ratio=aspect_ratio, minimum_duration=4)
-    stock_asset_uris = download_and_store_stock_videos(
-        workspace_id=workspace_id,
-        job_id=job_id,
-        output_prefix=output_prefix,
-        videos=stock_videos[: max(1, min(6, len(stock_videos)))],
+    stock_videos: list[StockVideo] = []
+    if video_source in {"veo3", "veo3_fast"}:
+        stock_asset_uris = generate_veo_video_assets(
+            workspace_id=workspace_id,
+            job_id=job_id,
+            output_prefix=output_prefix,
+            prompt=_video_prompt(prompt, final_script, terms, language),
+            aspect_ratio=aspect_ratio,
+            duration_seconds=duration_seconds,
+            count=generated_video_count,
+            fast=video_source == "veo3_fast",
+        )
+    else:
+        stock_videos = search_stock_videos(terms, aspect_ratio=aspect_ratio, minimum_duration=4)
+        stock_asset_uris = download_and_store_stock_videos(
+            workspace_id=workspace_id,
+            job_id=job_id,
+            output_prefix=output_prefix,
+            videos=stock_videos[: max(1, min(6, len(stock_videos)))],
+        )
+    timeline = build_timeline(
+        stock_asset_uris,
+        duration_seconds=duration_seconds,
+        max_clip_duration_seconds=max_clip_duration_seconds,
     )
-    timeline = build_timeline(stock_asset_uris, duration_seconds=duration_seconds)
     return ShortsPlan(
         prompt=prompt,
         language=language,
@@ -121,6 +142,56 @@ def generate_search_terms_with_vertex(prompt: str, script: str, language: str) -
     return fallback or ["Malaysia newsroom", "broadcast studio", "social media video"]
 
 
+def generate_veo_video_assets(
+    *,
+    workspace_id: str,
+    job_id: str,
+    output_prefix: str,
+    prompt: str,
+    aspect_ratio: str,
+    duration_seconds: int,
+    count: int,
+    fast: bool,
+) -> list[str]:
+    settings = get_settings()
+    if not settings.gcp_project_id:
+        return []
+    try:
+        from google import genai
+        from google.genai import types
+    except Exception:
+        return []
+
+    model = settings.veo_fast_model_name if fast else settings.veo_model_name
+    client = genai.Client(vertexai=True, project=settings.gcp_project_id, location=settings.gcp_region)
+    config = _veo_config(
+        types,
+        aspect_ratio=aspect_ratio,
+        duration_seconds=_veo_duration(duration_seconds),
+        count=max(1, min(count, 4)),
+    )
+    try:
+        operation = client.models.generate_videos(model=model, prompt=prompt, config=config)
+        operation = _wait_for_veo_operation(client, operation)
+        videos = _generated_videos_from_operation(operation)
+    except Exception:
+        return []
+
+    storage = StorageClient()
+    scratch = Path(settings.scratch_root) / "shorts-planner" / job_id / "veo"
+    scratch.mkdir(parents=True, exist_ok=True)
+    uris: list[str] = []
+    for index, video in enumerate(videos[: max(1, min(count, 4))], start=1):
+        filename = f"{job_id}-veo-{index:02d}.mp4"
+        local_path = scratch / filename
+        if not _save_generated_video(video, local_path):
+            continue
+        gcs_uri = storage.build_uri(workspace_id, f"{output_prefix}/veo", filename)
+        storage.copy_file(local_path, gcs_uri, "video/mp4")
+        uris.append(gcs_uri)
+    return uris
+
+
 def search_stock_videos(
     search_terms: list[str],
     *,
@@ -176,10 +247,15 @@ def download_and_store_stock_videos(
     return uris
 
 
-def build_timeline(asset_uris: list[str], *, duration_seconds: int) -> list[TimelineClip]:
+def build_timeline(
+    asset_uris: list[str],
+    *,
+    duration_seconds: int,
+    max_clip_duration_seconds: int = 5,
+) -> list[TimelineClip]:
     if not asset_uris:
         return []
-    per_clip = max(3, min(8, int(duration_seconds / max(len(asset_uris), 1)) or 5))
+    per_clip = max(3, min(max_clip_duration_seconds, int(duration_seconds / max(len(asset_uris), 1)) or 5))
     return [TimelineClip(input_uri=uri, start_seconds=0, end_seconds=per_clip) for uri in asset_uris]
 
 
@@ -256,3 +332,80 @@ def _strip_json_fence(value: str) -> str:
     if text.startswith("```"):
         return text[3:].removesuffix("```").strip()
     return text
+
+
+def _video_prompt(prompt: str, script: str, terms: list[str], language: str) -> str:
+    return (
+        "Create a social short for Malaysian digital audiences. Use realistic newsroom or social visuals, "
+        "natural motion, and native audio when supported. "
+        f"Language context: {language}. Subject: {prompt}. Script: {script}. "
+        f"Visual cues: {', '.join(terms[:6])}."
+    )
+
+
+def _veo_duration(duration_seconds: int) -> int:
+    if duration_seconds <= 4:
+        return 4
+    if duration_seconds <= 6:
+        return 6
+    return 8
+
+
+def _veo_config(types, *, aspect_ratio: str, duration_seconds: int, count: int):
+    try:
+        return types.GenerateVideosConfig(
+            aspect_ratio=aspect_ratio,
+            duration_seconds=duration_seconds,
+            number_of_videos=count,
+        )
+    except TypeError:
+        return None
+
+
+def _wait_for_veo_operation(client, operation):
+    settings = get_settings()
+    deadline = time.monotonic() + max(settings.veo_poll_timeout_seconds, 1)
+    while not getattr(operation, "done", True):
+        if time.monotonic() >= deadline:
+            break
+        time.sleep(max(settings.veo_poll_interval_seconds, 1.0))
+        operation_name = getattr(operation, "name", "")
+        if not operation_name:
+            break
+        operation = client.operations.get(operation_name)
+    return operation
+
+
+def _generated_videos_from_operation(operation) -> list:
+    result = getattr(operation, "result", None)
+    if callable(result):
+        result = result()
+    for value in (
+        getattr(operation, "generated_videos", None),
+        getattr(result, "generated_videos", None),
+        getattr(result, "videos", None),
+    ):
+        if value:
+            return list(value)
+    return []
+
+
+def _save_generated_video(video, local_path: Path) -> bool:
+    payload = getattr(video, "video", video)
+    save = getattr(payload, "save", None)
+    if callable(save):
+        save(str(local_path))
+        return local_path.exists() and local_path.stat().st_size > 0
+    data = getattr(payload, "video_bytes", None) or getattr(payload, "data", None)
+    if data:
+        local_path.write_bytes(data)
+        return True
+    uri = getattr(payload, "uri", "") or getattr(payload, "gcs_uri", "")
+    if uri.startswith("http"):
+        import requests
+
+        response = requests.get(uri, timeout=120)
+        response.raise_for_status()
+        local_path.write_bytes(response.content)
+        return local_path.stat().st_size > 0
+    return False

@@ -330,6 +330,70 @@ def test_local_shorts_flow_completes(monkeypatch, tmp_path) -> None:
         assert len(generated_outputs) == 1
 
 
+def test_shorts_flow_records_moneyprinter_settings(monkeypatch, tmp_path) -> None:
+    app = _fresh_app(monkeypatch, tmp_path)
+    with TestClient(app) as client:
+        response = client.post(
+            "/workflows/shorts",
+            json={
+                "workspace_id": "media-prima-demo",
+                "prompt": "Generate a configurable short.",
+                "script": "Narration with subtitle settings.",
+                "search_terms": ["studio presenter", "Malaysia digital"],
+                "language": "en-MY",
+                "aspect_ratio": "9:16",
+                "video_source": "veo3_fast",
+                "generated_video_count": 2,
+                "max_clip_duration_seconds": 4,
+                "enable_subtitles": True,
+                "subtitle_position": "top",
+                "subtitle_font_color": "#ffeeaa",
+                "subtitle_font_size": 54,
+                "enable_dubbing": True,
+                "tts_server": "gcp",
+                "speech_volume": 0.8,
+                "speech_rate": 1.1,
+            },
+        )
+        assert response.status_code == 200
+        job_id = response.json()["job_id"]
+
+    from mpstudio.contracts import AgentTaskKind, AgentTaskPayload
+    from mpstudio.database import session_scope
+    from mpstudio.repository import claim_task, complete_task
+    from mpstudio.storage import StorageClient
+    from services.agents.shortgen.app.main import handle_shortgen
+    from services.orchestrator.app.main import handle_orchestration
+
+    with session_scope() as session:
+        task = claim_task(session, AgentTaskKind.orchestrate)
+        assert task is not None
+        payload = AgentTaskPayload.model_validate(task.payload)
+        complete_task(session, task)
+    handle_orchestration(payload)
+
+    with session_scope() as session:
+        task = claim_task(session, AgentTaskKind.shortgen)
+        assert task is not None
+        payload = AgentTaskPayload.model_validate(task.payload)
+        complete_task(session, task)
+    handle_shortgen(payload)
+
+    with TestClient(app) as client:
+        detail = client.get(f"/jobs/{job_id}")
+        assert detail.status_code == 200
+        script_asset = next(output for output in detail.json()["outputs"] if output["filename"].endswith("-short-script.json"))
+        script_payload = json.loads(StorageClient().read_text(script_asset["gcs_uri"]))
+        assert script_payload["video_source"] == "veo3_fast"
+        assert script_payload["generated_video_count"] == 2
+        assert script_payload["subtitle_settings"]["enabled"] is True
+        assert script_payload["subtitle_settings"]["position"] == "top"
+        assert script_payload["subtitle_settings"]["font_color"] == "#ffeeaa"
+        assert script_payload["dubbing_settings"]["enabled"] is True
+        assert script_payload["dubbing_settings"]["tts_server"] == "gcp"
+        assert script_payload["dubbing_settings"]["speech_rate"] == 1.1
+
+
 def test_shorts_flow_preserves_newsroom_handoff_script(monkeypatch, tmp_path) -> None:
     app = _fresh_app(monkeypatch, tmp_path)
     approved_script = "Approved newsroom narration. Keep this exact editorial line."

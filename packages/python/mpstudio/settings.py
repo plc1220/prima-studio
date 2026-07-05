@@ -26,6 +26,10 @@ class Settings(BaseSettings):
     scratch_root: str = "/tmp/mpstudio"
 
     gemini_model_name: str = "gemini-2.5-flash"
+    veo_model_name: str = "veo-3.1-generate-001"
+    veo_fast_model_name: str = "veo-3.1-fast-generate-001"
+    veo_poll_timeout_seconds: int = 600
+    veo_poll_interval_seconds: float = 10.0
     shortgen_image: str = "ghcr.io/harry0703/moneyprinterturbo:latest"
     stock_video_source: str = "pexels"
     pexels_api_keys: str = ""

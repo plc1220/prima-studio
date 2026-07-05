@@ -130,7 +130,25 @@ class ShortsWorkflowRequest(BaseModel):
     prompt: str = Field(min_length=1, max_length=2000)
     language: str = Field(default="ms-MY", max_length=32)
     aspect_ratio: AspectRatio = AspectRatio.portrait
-    voice_name: str = Field(default="ms-MY-YasminNeural", max_length=128)
+    voice_name: str = Field(default="ms-MY-Standard-A", max_length=128)
+    video_source: Literal["stock", "veo3", "veo3_fast"] = "stock"
+    video_concat_mode: Literal["random", "sequential"] = "random"
+    video_transition_mode: Literal["none", "fade"] = "none"
+    max_clip_duration_seconds: int = Field(default=5, ge=3, le=30)
+    generated_video_count: int = Field(default=1, ge=1, le=4)
+    enable_subtitles: bool = True
+    subtitle_font: str = Field(default="DejaVuSans-Bold.ttf", max_length=128)
+    subtitle_position: Literal["bottom", "middle", "top"] = "bottom"
+    subtitle_font_color: str = Field(default="#ffffff", max_length=24)
+    subtitle_font_size: int = Field(default=60, ge=24, le=120)
+    subtitle_outline_color: str = Field(default="#000000", max_length=24)
+    subtitle_outline_width: float = Field(default=1.5, ge=0, le=10)
+    enable_dubbing: bool = True
+    tts_server: Literal["gcp", "native", "none"] = "gcp"
+    speech_volume: float = Field(default=1.0, ge=0, le=2)
+    speech_rate: float = Field(default=1.0, ge=0.5, le=2)
+    background_music: Literal["none", "random"] = "none"
+    background_music_volume: float = Field(default=0.2, ge=0, le=1)
     output_prefix: str = Field(default="outputs/shorts", max_length=512)
     duration_seconds: int = Field(default=30, ge=10, le=180)
     script: str | None = Field(default=None, max_length=8000)

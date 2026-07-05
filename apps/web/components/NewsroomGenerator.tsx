@@ -198,7 +198,7 @@ export function NewsroomGenerator() {
           search_terms: narrative.handoff.search_terms,
           language,
           aspect_ratio: aspectRatio,
-          voice_name: language === "ms-MY" ? "ms-MY-YasminNeural" : "en-MY-YasminNeural",
+          voice_name: language === "ms-MY" ? "ms-MY-Standard-A" : "en-US-Neural2-F",
           output_prefix: "outputs/shorts",
           duration_seconds: duration,
           source_newsroom_job_id: narrative.handoff.source_newsroom_job_id,

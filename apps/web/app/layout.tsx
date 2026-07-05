@@ -26,9 +26,11 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
                 <Layers size={18} /> Workspaces
               </Link>
             </nav>
-            <div className="api-pill">
-              API: {process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080"}
-            </div>
+            {process.env.NODE_ENV !== "production" ? (
+              <div className="api-pill">
+                API: {process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080"}
+              </div>
+            ) : null}
           </header>
           <main className="main">{children}</main>
         </div>

@@ -34,6 +34,7 @@ import {
 import { StatusPill } from "@/components/StatusPill";
 
 const defaultWorkspaceId = "media-prima-video-clipping";
+const defaultBucketName = process.env.NEXT_PUBLIC_GCS_BUCKET_NAME || "mp-ai-video-clipping-bucket-v2";
 const lane = "video_clipping";
 
 const productionStages = [
@@ -121,7 +122,7 @@ export function VideoClippingForm() {
   const [outputPrefix, setOutputPrefix] = useState("outputs/video-clipping");
   const [prompt, setPrompt] = useState("Create a social cut suitable for Media Prima digital audiences.");
   const [activeStage, setActiveStage] = useState<StageId>("split");
-  const [bucketName, setBucketName] = useState("mp-ai-video-clipping-bucket");
+  const [bucketName, setBucketName] = useState(defaultBucketName);
   const [bucketWorkspaces, setBucketWorkspaces] = useState<string[]>([]);
   const [bucketMessage, setBucketMessage] = useState("");
   const [bucketBusy, setBucketBusy] = useState(false);

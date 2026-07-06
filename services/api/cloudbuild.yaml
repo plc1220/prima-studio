@@ -3,7 +3,7 @@ substitutions:
   _SERVICE_NAME: mp-ai-video-clipping-api
   _REPO_NAME: mp-ai-video
   _IMAGE_TAG: latest
-  _GCS_BUCKET_NAME: mp-ai-video-clipping-bucket
+  _GCS_BUCKET_NAME: mp-ai-video-clipping-bucket-v2
 
 steps:
   - name: gcr.io/cloud-builders/docker

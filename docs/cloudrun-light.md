@@ -7,14 +7,14 @@ The API runs with `LIGHT_INLINE_WORKFLOWS=true`, so demo workflows complete in-p
 ## Deploy
 
 ```bash
-PROJECT_ID=mp-ai-video REGION=asia-southeast1 scripts/deploy-cloudrun-light.sh
+PROJECT_ID=mp-ai-video REGION=asia-southeast1 GCS_BUCKET_NAME=mp-ai-video-clipping-bucket-v2 scripts/deploy-cloudrun-light.sh
 ```
 
 Latest light deployment:
 
 - API: https://mp-ai-video-clipping-api-vgtxmgtl6a-as.a.run.app
 - Web: https://mp-ai-video-clipping-web-vgtxmgtl6a-as.a.run.app
-- Bucket: `mp-ai-video-clipping-bucket`
+- Bucket: `mp-ai-video-clipping-bucket-v2`
 
 The script:
 
@@ -23,7 +23,7 @@ The script:
 3. Creates an Artifact Registry Docker repo if missing.
 4. Builds and deploys `mp-ai-video-clipping-api`.
 5. Reads the API URL.
-6. Builds and deploys `mp-ai-video-clipping-web` with `NEXT_PUBLIC_API_BASE_URL` set to the API URL.
+6. Builds and deploys `mp-ai-video-clipping-web` with `NEXT_PUBLIC_API_BASE_URL` set to the API URL and `NEXT_PUBLIC_GCS_BUCKET_NAME` set to the new bucket.
 
 ## IAM Needed
 

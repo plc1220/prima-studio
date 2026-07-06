@@ -6,7 +6,14 @@ REGION="${REGION:-asia-southeast1}"
 REPO_NAME="${REPO_NAME:-mp-ai-video}"
 API_SERVICE="${API_SERVICE:-mp-ai-video-clipping-api}"
 WEB_SERVICE="${WEB_SERVICE:-mp-ai-video-clipping-web}"
-GCS_BUCKET_NAME="${GCS_BUCKET_NAME:-mp-ai-video-clipping-bucket}"
+GCS_BUCKET_NAME="${GCS_BUCKET_NAME:-mp-ai-video-clipping-bucket-v2}"
+
+if [[ -z "$(gcloud auth list --format='value(account)' 2>/dev/null | head -n 1)" ]]; then
+  ADC_TOKEN_FILE="$(mktemp)"
+  gcloud auth application-default print-access-token >"${ADC_TOKEN_FILE}"
+  export CLOUDSDK_AUTH_ACCESS_TOKEN_FILE="${ADC_TOKEN_FILE}"
+  trap 'rm -f "${ADC_TOKEN_FILE}"' EXIT
+fi
 
 gcloud config set project "${PROJECT_ID}"
 
@@ -25,6 +32,13 @@ TRANSCODER_SERVICE_ACCOUNT="service-${PROJECT_NUMBER}@gcp-sa-transcoder.iam.gser
 gcloud beta services identity create \
   --service=transcoder.googleapis.com \
   --project="${PROJECT_ID}" >/dev/null 2>&1 || true
+
+if ! gcloud storage buckets describe "gs://${GCS_BUCKET_NAME}" >/dev/null 2>&1; then
+  gcloud storage buckets create "gs://${GCS_BUCKET_NAME}" \
+    --project="${PROJECT_ID}" \
+    --location="${REGION}" \
+    --uniform-bucket-level-access
+fi
 
 gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
   --member="serviceAccount:${RUN_SERVICE_ACCOUNT}" \
@@ -54,7 +68,7 @@ API_URL="$(gcloud run services describe "${API_SERVICE}" --region="${REGION}" --
 
 gcloud builds submit . \
   --config apps/web/cloudbuild.yaml \
-  --substitutions "_REGION=${REGION},_SERVICE_NAME=${WEB_SERVICE},_REPO_NAME=${REPO_NAME},_API_BASE_URL=${API_URL},_IMAGE_TAG=latest"
+  --substitutions "_REGION=${REGION},_SERVICE_NAME=${WEB_SERVICE},_REPO_NAME=${REPO_NAME},_API_BASE_URL=${API_URL},_IMAGE_TAG=latest,_GCS_BUCKET_NAME=${GCS_BUCKET_NAME}"
 
 WEB_URL="$(gcloud run services describe "${WEB_SERVICE}" --region="${REGION}" --format='value(status.url)')"
 

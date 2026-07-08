@@ -21,6 +21,7 @@ from mpstudio.contracts import (
     NewsroomWorkflowRequest,
     ShortsWorkflowRequest,
     StepName,
+    VideoClippingRenderSelectionRequest,
     VideoClippingWorkflowRequest,
     UploadUrlRequest,
     UploadUrlResponse,
@@ -30,6 +31,7 @@ from mpstudio.contracts import (
 )
 from mpstudio.database import init_db, session_scope
 from mpstudio.repository import (
+    append_output_asset,
     claim_task,
     complete_task,
     create_asset,
@@ -236,6 +238,86 @@ def start_video_clipping(body: VideoClippingWorkflowRequest, background_tasks: B
     )
 
 
+@app.post("/workflows/video-clipping/render-selection", response_model=WorkflowResponse)
+def render_video_clipping_selection(body: VideoClippingRenderSelectionRequest) -> WorkflowResponse:
+    storage = StorageClient()
+    metadata_filename = "selected-highlights.json"
+    input_asset_ids = [body.source_asset_id] if body.source_asset_id else []
+    task_payload: AgentTaskPayload
+    with session_scope() as session:
+        job = create_job(
+            session,
+            workspace_id=body.workspace_id,
+            kind=WorkflowKind.video_clipping,
+            language=body.language,
+            aspect_ratio=str(body.aspect_ratio),
+            output_prefix=body.output_prefix,
+            input_asset_ids=input_asset_ids,
+            params=body.model_dump(mode="json"),
+        )
+        metadata_filename = f"{job.id}-selected-highlights.json"
+        metadata_uri = storage.build_uri(body.workspace_id, body.output_prefix, metadata_filename)
+        storage.write_text(metadata_uri, json.dumps(body.highlights, indent=2), "application/json")
+        metadata_asset = create_asset(
+            session,
+            workspace_id=body.workspace_id,
+            kind=AssetKind.metadata,
+            gcs_uri=metadata_uri,
+            filename=metadata_filename,
+            content_type="application/json",
+        )
+        append_output_asset(session, job.id, metadata_asset.id)
+        requested = EventPayload(
+            job_id=job.id,
+            workspace_id=body.workspace_id,
+            step=StepName.workflow_requested,
+            input_asset_ids=input_asset_ids,
+            output_prefix=body.output_prefix,
+            language=body.language,
+            aspect_ratio=job.aspect_ratio,
+            idempotency_key=f"{job.id}:selection_requested",
+            metadata={"selected_highlights": len(body.highlights)},
+        )
+        record_event(session, requested, "Selected highlights render requested")
+        uploaded = EventPayload(
+            job_id=job.id,
+            workspace_id=body.workspace_id,
+            step=StepName.artifact_uploaded,
+            input_asset_ids=input_asset_ids,
+            output_prefix=body.output_prefix,
+            language=body.language,
+            aspect_ratio=job.aspect_ratio,
+            idempotency_key=f"{job.id}:selection_metadata_uploaded",
+            metadata={"asset_id": str(metadata_asset.id), "gcs_uri": metadata_uri},
+        )
+        record_event(session, uploaded, "Selected highlights metadata prepared")
+        render_event = EventPayload(
+            job_id=job.id,
+            workspace_id=body.workspace_id,
+            step=StepName.render_requested,
+            input_asset_ids=[metadata_asset.id],
+            output_prefix=body.output_prefix,
+            language=body.language,
+            aspect_ratio=job.aspect_ratio,
+            idempotency_key=f"{job.id}:render_requested",
+        )
+        record_event(session, render_event, "Queued selected highlights render")
+        task_payload = AgentTaskPayload(
+            job_id=job.id,
+            workspace_id=body.workspace_id,
+            workflow_kind=WorkflowKind.video_clipping,
+            step=StepName.render_requested.value,
+            input_asset_ids=[metadata_asset.id],
+            output_prefix=body.output_prefix,
+            language=body.language,
+            aspect_ratio=job.aspect_ratio,
+            idempotency_key=f"{job.id}:render-agent",
+            params={**body.model_dump(mode="json"), "metadata_asset_id": str(metadata_asset.id)},
+        )
+        enqueue_task(session, kind=AgentTaskKind.render, payload=task_payload)
+    return WorkflowResponse(job_id=job.id, status=JobStatus.queued)
+
+
 @app.post("/workflows/shorts", response_model=WorkflowResponse)
 def start_shorts(body: ShortsWorkflowRequest, background_tasks: BackgroundTasks) -> WorkflowResponse:
     return _start_workflow(
@@ -369,8 +451,11 @@ async def sync_video_clipping_bucket(request: Request) -> dict:
 async def local_upload(request: Request, target: str = Query(...)) -> dict[str, str]:
     storage = StorageClient()
     body = await request.body()
-    path = storage.local_path_for_uri(target)
-    path.write_bytes(body)
+    storage.write_bytes(
+        target,
+        body,
+        content_type=request.headers.get("content-type") or "application/octet-stream",
+    )
     return {"status": "ok", "target": target}
 
 

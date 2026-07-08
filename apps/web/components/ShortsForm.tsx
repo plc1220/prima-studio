@@ -108,6 +108,20 @@ export function ShortsForm() {
     return trimmed;
   }
 
+  async function switchWorkspace(nextWorkspaceId: string) {
+    const nextWorkspace = nextWorkspaceId.trim();
+    if (!nextWorkspace || nextWorkspace === workspaceId) return;
+    setWorkspaceId(nextWorkspace);
+    setJobs([]);
+    setDownloadUrls({});
+    setExpandedJobId("");
+    setNotice(null);
+    const searchParams = new URLSearchParams(window.location.search);
+    searchParams.set("workspace", nextWorkspace);
+    window.history.replaceState(null, "", `/shorts?${searchParams.toString()}`);
+    await refreshHistory(nextWorkspace);
+  }
+
   useEffect(() => {
     refreshHistory();
   }, []);
@@ -221,12 +235,6 @@ export function ShortsForm() {
     setKeywords(draftTerms());
   }
 
-  function showLatestJobStatus(step: string) {
-    if (!latestJob) return;
-    setExpandedJobId((current) => (current === latestJob.id ? "" : latestJob.id));
-    setNotice({ kind: "info", message: `${step}: latest shorts job ${latestJob.id} is ${latestJob.status}.` });
-  }
-
   function toggleJobDetails(jobId: string) {
     setExpandedJobId((current) => (current === jobId ? "" : jobId));
   }
@@ -246,7 +254,7 @@ export function ShortsForm() {
 
       {notice ? <AlertBanner notice={notice} /> : null}
 
-      <section className="wizard-shell">
+      <section className="wizard-shell shorts-workbench">
         <aside className="wizard-steps" aria-label="Shorts generation pipeline">
           {pipelineSteps.map((step, index) => {
             const Icon = step.icon;
@@ -276,7 +284,7 @@ export function ShortsForm() {
               <div className="eyebrow">Step {activeStep + 1} of {pipelineSteps.length}</div>
               <h2>{pipelineSteps[activeStep].title}</h2>
             </div>
-            <WorkspaceContext workspaceId={workspaceId} />
+            <WorkspaceContext workspaceId={workspaceId} onSelectWorkspace={switchWorkspace} />
           </div>
 
           {activeStep === 0 ? (
@@ -493,33 +501,9 @@ export function ShortsForm() {
             )}
           </div>
         </div>
-      </section>
 
-      <section className="split-layout jobs-layout">
-        <aside className="side-panel">
-          <div className="side-heading">
-            <Clock3 size={18} />
-            <h2>Pipeline</h2>
-          </div>
-          <div className="pipeline-list">
-            {pipelineSteps.map((step, index) => (
-              <button
-                className={`pipeline-step${activeStep === index ? " active" : ""}${index < activeStep ? " complete" : ""}`}
-                type="button"
-                key={step.title}
-                onClick={() => {
-                  setActiveStep(index);
-                  showLatestJobStatus(step.title);
-                }}
-              >
-                <span className="step-number">{index + 1}</span>
-                <span>{step.title}</span>
-                {latestJob ? <StatusPill status={latestJob.status} /> : null}
-              </button>
-            ))}
-          </div>
-        </aside>
-        <div className="list-panel">
+        <aside className="shorts-output-panel" aria-label="Shorts output review">
+          <section className="list-panel">
           <div className="section-heading">
             <h2>Recent shorts jobs</h2>
           </div>
@@ -537,47 +521,48 @@ export function ShortsForm() {
           ) : (
             <EmptyState icon="clock" title="No shorts jobs yet" body="Generated jobs will appear here after you render a short." />
           )}
-        </div>
-      </section>
+          </section>
 
-      <section className="list-panel">
-        <div className="section-heading">
-          <h2>Generated shorts</h2>
-        </div>
-        {generatedShorts.length ? (
-          <div className="output-grid">
-            {generatedShorts.map(({ job, asset }) => (
-              <article className="output-item" key={asset.id}>
-                <div>
-                  {downloadUrls[asset.id] ? <video className="video-preview" src={downloadUrls[asset.id]} controls preload="metadata" /> : null}
-                  <h3>{asset.filename}</h3>
-                  <p className="muted">{new Date(job.created_at).toLocaleString()}</p>
-                  <p className="code">{asset.gcs_uri}</p>
-                </div>
-                <div className="actions">
-                  <StatusPill status={job.status} />
-                  <button className="icon-button" onClick={() => openDownload(asset.id)} aria-label="Download output" title="Download output">
-                    <Download size={18} />
-                  </button>
-                  <button
-                    className="icon-button danger"
-                    onClick={() => deleteGeneratedShort(job.id)}
-                    disabled={busy}
-                    aria-label="Delete generated short"
-                    title="Delete generated short"
-                  >
-                    <Trash2 size={18} />
-                  </button>
-                  <Link className="button secondary" href={`/jobs/${job.id}`}>
-                    Job
-                  </Link>
-                </div>
-              </article>
-            ))}
-          </div>
-        ) : (
-          <EmptyState icon="video" title="No generated shorts yet" body="Final MP4 outputs will appear here with preview, status, and download actions." />
-        )}
+          <section className="list-panel">
+            <div className="section-heading">
+              <h2>Generated shorts</h2>
+            </div>
+            {generatedShorts.length ? (
+              <div className="output-grid compact-output-grid">
+                {generatedShorts.map(({ job, asset }) => (
+                  <article className="output-item" key={asset.id}>
+                    <div>
+                      {downloadUrls[asset.id] ? <video className="video-preview" src={downloadUrls[asset.id]} controls preload="metadata" /> : null}
+                      <h3>{asset.filename}</h3>
+                      <p className="muted">{new Date(job.created_at).toLocaleString()}</p>
+                      <p className="code">{asset.gcs_uri}</p>
+                    </div>
+                    <div className="actions">
+                      <StatusPill status={job.status} />
+                      <button className="icon-button" onClick={() => openDownload(asset.id)} aria-label="Download output" title="Download output">
+                        <Download size={18} />
+                      </button>
+                      <button
+                        className="icon-button danger"
+                        onClick={() => deleteGeneratedShort(job.id)}
+                        disabled={busy}
+                        aria-label="Delete generated short"
+                        title="Delete generated short"
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                      <Link className="button secondary" href={`/jobs/${job.id}`}>
+                        Job
+                      </Link>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <EmptyState icon="video" title="No generated shorts yet" body="Final MP4 outputs will appear here with preview, status, and download actions." />
+            )}
+          </section>
+        </aside>
       </section>
     </>
   );
@@ -593,13 +578,87 @@ function AlertBanner({ notice }: { notice: NonNullable<Notice> }) {
   );
 }
 
-function WorkspaceContext({ workspaceId }: { workspaceId: string }) {
+function WorkspaceContext({ workspaceId, onSelectWorkspace }: { workspaceId: string; onSelectWorkspace: (workspaceId: string) => void }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [workspaces, setWorkspaces] = useState<WorkspaceRecord[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const filteredWorkspaces = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    return workspaces.filter(
+      (workspace) =>
+        workspace.lane === "shorts" &&
+        (!needle || workspace.id.toLowerCase().includes(needle) || workspace.name.toLowerCase().includes(needle))
+    );
+  }, [query, workspaces]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    let isMounted = true;
+    setIsLoading(true);
+    apiFetch<WorkspaceRecord[]>("/workspaces?lane=shorts")
+      .then((rows) => {
+        if (isMounted) setWorkspaces(rows.filter((workspace) => workspace.lane === "shorts"));
+      })
+      .catch(() => {
+        if (isMounted) setWorkspaces([]);
+      })
+      .finally(() => {
+        if (isMounted) setIsLoading(false);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, [isOpen]);
+
+  function chooseWorkspace(nextWorkspaceId: string) {
+    onSelectWorkspace(nextWorkspaceId);
+    setIsOpen(false);
+    setQuery("");
+  }
+
   return (
-    <div className="workspace-context compact">
-      <span>
-        Workspace <strong>{workspaceId}</strong>
-      </span>
-      <Link href="/workspaces">Change</Link>
+    <div className="workspace-context">
+      <button className="workspace-switcher-button" type="button" onClick={() => setIsOpen((current) => !current)} aria-expanded={isOpen}>
+        <Search size={15} />
+        <span>Workspace</span>
+        <strong>{workspaceId}</strong>
+      </button>
+      {isOpen ? (
+        <div className="workspace-popover align-right" role="dialog" aria-label="Choose shorts workspace">
+          <div className="search-field compact">
+            <Search size={16} />
+            <input
+              autoFocus
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search shorts workspaces"
+            />
+          </div>
+          <div className="workspace-result-list">
+            {isLoading ? <div className="empty-state compact-empty">Loading workspaces...</div> : null}
+            {!isLoading && filteredWorkspaces.length ? (
+              filteredWorkspaces.slice(0, 10).map((workspace) => (
+                <button
+                  className={workspace.id === workspaceId ? "workspace-result active" : "workspace-result"}
+                  type="button"
+                  key={workspace.id}
+                  onClick={() => chooseWorkspace(workspace.id)}
+                >
+                  <strong>{workspace.name}</strong>
+                  {workspace.name !== workspace.id ? <small>{workspace.id}</small> : null}
+                </button>
+              ))
+            ) : null}
+            {!isLoading && !filteredWorkspaces.length ? (
+              <div className="empty-state compact-empty">No shorts workspaces found.</div>
+            ) : null}
+          </div>
+          <Link className="workspace-manage-link" href="/workspaces">
+            Manage workspaces
+          </Link>
+        </div>
+      ) : null}
     </div>
   );
 }

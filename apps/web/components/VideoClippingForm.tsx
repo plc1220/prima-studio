@@ -2,21 +2,17 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Bot,
+  ChevronDown,
   CheckCircle2,
-  CheckSquare,
-  ClipboardCheck,
-  FileJson,
+  Download,
   FileVideo,
-  Film,
-  Layers,
-  ListChecks,
+  FileText,
   PlayCircle,
   RefreshCw,
   Search,
-  Scissors,
+  Trash2,
   UploadCloud,
   Video,
   WandSparkles
@@ -24,91 +20,38 @@ import {
 import {
   apiFetch,
   type AssetRecord,
+  type DownloadUrlResponse,
+  type JobDetail,
   type JobRecord,
   type UploadUrlResponse,
-  type VideoClippingBucketSyncResponse,
-  type VideoClippingBucketWorkspacesResponse,
   type WorkflowResponse,
   type WorkspaceRecord
 } from "@/lib/api";
 import { StatusPill } from "@/components/StatusPill";
 
 const defaultWorkspaceId = "media-prima-video-clipping";
-const defaultBucketName = process.env.NEXT_PUBLIC_GCS_BUCKET_NAME || "mp-ai-video-clipping-bucket-v2";
 const lane = "video_clipping";
 
-const productionStages = [
-  { id: "split", label: "Ingest", legacy: "Video Split", output: "Source footage", icon: <UploadCloud size={17} /> },
-  { id: "metadata", label: "Analyze", legacy: "Metadata Generation", output: "Scene intelligence", icon: <WandSparkles size={17} /> },
-  { id: "clips", label: "Select", legacy: "Clip Generation", output: "Candidate clips", icon: <Scissors size={17} /> },
-  { id: "joining", label: "Assemble", legacy: "Video Joining", output: "Storyboard cut", icon: <ListChecks size={17} /> },
-  { id: "ai", label: "Export", legacy: "AI Clip Generation", output: "Review package", icon: <Video size={17} /> }
-] as const;
-
-type StageId = (typeof productionStages)[number]["id"];
-
-const artifactKinds = [
-  { kind: "source_video", label: "Sources", icon: <FileVideo size={16} /> },
-  { kind: "segment", label: "Segments", icon: <Layers size={16} /> },
-  { kind: "metadata", label: "Scene JSON", icon: <FileJson size={16} /> },
-  { kind: "clip", label: "Clips", icon: <Film size={16} /> },
-  { kind: "final_video", label: "Finals", icon: <Video size={16} /> }
-] as const;
-
-const sceneInsights = [
-  {
-    timecode: "00:00:08",
-    range: "00:00:08 - 00:00:24",
-    title: "Doctor sets the concern",
-    summary: "Clear setup, strong context, useful as the opening beat.",
-    speaker: "Doctor",
-    score: 82
-  },
-  {
-    timecode: "00:01:12",
-    range: "00:01:12 - 00:01:38",
-    title: "Practical next step explained",
-    summary: "Best candidate for short-form clarity and trust.",
-    speaker: "Doctor",
-    score: 91
-  },
-  {
-    timecode: "00:02:03",
-    range: "00:02:03 - 00:02:19",
-    title: "Patient reaction beat",
-    summary: "Useful transition into emotional payoff.",
-    speaker: "Patient",
-    score: 74
-  }
-];
-
-const clipCandidates = [
-  {
-    range: "00:01:12 - 00:01:38",
-    duration: "0:26",
-    title: "Key explanation for digital audience",
-    reason: "Concise explanation, clean speaker focus, low setup cost.",
-    tags: ["Hook", "Malay", "9:16"],
-    score: 91
-  },
-  {
-    range: "00:02:03 - 00:02:19",
-    duration: "0:16",
-    title: "Reaction bridge",
-    reason: "Human beat that creates emotional continuity before the final CTA.",
-    tags: ["Reaction", "Bridge", "1:1"],
-    score: 74
-  }
-];
-
-const storyboardBeats = [
-  { label: "Hook", range: "00:00:08 - 00:00:24" },
-  { label: "Explanation", range: "00:01:12 - 00:01:38" },
-  { label: "Reaction", range: "00:02:03 - 00:02:19" }
-];
+type HighlightCandidate = {
+  id: string;
+  range: string;
+  startSeconds: number;
+  endSeconds: number;
+  title: string;
+  rationale: string;
+  tone: string;
+  category: string;
+  sourceAssetId: string;
+  raw: Record<string, unknown>;
+};
 
 export function VideoClippingForm() {
   const params = useSearchParams();
+  const sourceVideoRef = useRef<HTMLVideoElement>(null);
+  const previewEndTimeRef = useRef<number | null>(null);
+  const filenameInputRef = useRef<HTMLInputElement>(null);
+  const keepFilenameFocusRef = useRef(false);
+  const filenameSelectionRef = useRef({ start: 0, end: 0 });
   const [workspaceId, setWorkspaceId] = useState(params.get("workspace") || defaultWorkspaceId);
   const [assetQuery, setAssetQuery] = useState("");
   const [assets, setAssets] = useState<AssetRecord[]>([]);
@@ -116,18 +59,28 @@ export function VideoClippingForm() {
   const [filename, setFilename] = useState("sample-broadcast.mp4");
   const [file, setFile] = useState<File | null>(null);
   const [assetId, setAssetId] = useState("");
+  const [previewUrl, setPreviewUrl] = useState("");
+  const [previewError, setPreviewError] = useState("");
+  const [downloadUrls, setDownloadUrls] = useState<Record<string, string>>({});
   const [language, setLanguage] = useState("ms-MY");
   const [aspectRatio, setAspectRatio] = useState("9:16");
+  const [exportMode, setExportMode] = useState<"individual" | "joined">("individual");
   const [segmentDuration, setSegmentDuration] = useState(60);
   const [outputPrefix, setOutputPrefix] = useState("outputs/video-clipping");
   const [prompt, setPrompt] = useState("Create a social cut suitable for Media Prima digital audiences.");
-  const [activeStage, setActiveStage] = useState<StageId>("split");
-  const [bucketName, setBucketName] = useState(defaultBucketName);
-  const [bucketWorkspaces, setBucketWorkspaces] = useState<string[]>([]);
-  const [bucketMessage, setBucketMessage] = useState("");
-  const [bucketBusy, setBucketBusy] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [deletingAssetId, setDeletingAssetId] = useState("");
+  const [deletingSourceId, setDeletingSourceId] = useState("");
   const [message, setMessage] = useState("");
+  const [highlightsMessage, setHighlightsMessage] = useState("");
+  const [highlightCandidates, setHighlightCandidates] = useState<HighlightCandidate[]>([]);
+  const [selectedHighlightIds, setSelectedHighlightIds] = useState<string[]>([]);
+  const [metadataJson, setMetadataJson] = useState("");
+  const [sourceDrawerOpen, setSourceDrawerOpen] = useState(true);
+  const [expandedJobId, setExpandedJobId] = useState("");
+  const [jobDetailsById, setJobDetailsById] = useState<Record<string, JobDetail>>({});
+  const [jobDetailBusy, setJobDetailBusy] = useState("");
+  const [jobDetailMessage, setJobDetailMessage] = useState("");
 
   async function refreshWorkspace(nextWorkspace = workspaceId) {
     setMessage("");
@@ -158,6 +111,19 @@ export function VideoClippingForm() {
     refreshWorkspace();
   }, []);
 
+  useEffect(() => {
+    if (!keepFilenameFocusRef.current) return;
+    const handle = window.requestAnimationFrame(() => {
+      const input = filenameInputRef.current;
+      if (!input || document.activeElement === input) return;
+      input.focus();
+      const start = Math.min(filenameSelectionRef.current.start, input.value.length);
+      const end = Math.min(filenameSelectionRef.current.end, input.value.length);
+      input.setSelectionRange(start, end);
+    });
+    return () => window.cancelAnimationFrame(handle);
+  }, [filename]);
+
   const assetsByKind = useMemo(() => {
     return assets.reduce<Record<string, AssetRecord[]>>((groups, asset) => {
       groups[asset.kind] = [...(groups[asset.kind] || []), asset];
@@ -166,16 +132,16 @@ export function VideoClippingForm() {
   }, [assets]);
 
   const sourceAssets = assetsByKind.source_video || [];
-  const segmentAssets = assetsByKind.segment || [];
-  const metadataAssets = assetsByKind.metadata || [];
+  const metadataAssets = [...(assetsByKind.metadata || [])].sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
   const clipAssets = assetsByKind.clip || [];
-  const finalVideoAssets = assetsByKind.final_video || [];
+  const finalVideoAssets = [...(assetsByKind.final_video || [])].sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
   const selectedAsset = sourceAssets.find((asset) => asset.id === assetId);
   const latestJob = jobs[0];
-  const activeStageMeta = productionStages.find((stage) => stage.id === activeStage) || productionStages[0];
   const workflowReady = Boolean(assetId);
   const latestFinalVideo = finalVideoAssets[0];
-  const stageAction = getStageAction();
+  const latestFinalVideoUrl = latestFinalVideo ? downloadUrls[latestFinalVideo.id] : "";
+  const latestMetadata = metadataAssets[0];
+  const selectedHighlights = highlightCandidates.filter((candidate) => selectedHighlightIds.includes(candidate.id));
 
   const filteredSourceAssets = useMemo(() => {
     const needle = assetQuery.trim().toLowerCase();
@@ -219,6 +185,117 @@ export function VideoClippingForm() {
     }
   }
 
+  useEffect(() => {
+    if (assetId || !sourceAssets.length) return;
+    setAssetId(sourceAssets[0].id);
+  }, [assetId, sourceAssets]);
+
+  useEffect(() => {
+    let isMounted = true;
+    setPreviewUrl("");
+    setPreviewError("");
+    previewEndTimeRef.current = null;
+    if (!selectedAsset) return;
+
+    apiFetch<DownloadUrlResponse>(`/assets/${selectedAsset.id}/download-url`)
+      .then((response) => {
+        if (isMounted) setPreviewUrl(response.download_url);
+      })
+      .catch(() => {
+        if (isMounted) setPreviewError("Preview unavailable. Source is still selected for analysis.");
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedAsset]);
+
+  useEffect(() => {
+    const video = sourceVideoRef.current;
+    if (!video) return;
+
+    function stopAtCandidateEnd() {
+      const endTime = previewEndTimeRef.current;
+      if (endTime === null || !video) return;
+      if (video.currentTime >= endTime) {
+        video.pause();
+        video.currentTime = endTime;
+        previewEndTimeRef.current = null;
+      }
+    }
+
+    video.addEventListener("timeupdate", stopAtCandidateEnd);
+    video.addEventListener("seeking", stopAtCandidateEnd);
+    video.addEventListener("ended", () => {
+      previewEndTimeRef.current = null;
+    });
+    return () => {
+      video.removeEventListener("timeupdate", stopAtCandidateEnd);
+      video.removeEventListener("seeking", stopAtCandidateEnd);
+    };
+  }, [previewUrl]);
+
+  useEffect(() => {
+    let isMounted = true;
+    const missingAssets = [...metadataAssets, ...finalVideoAssets].filter((asset) => !downloadUrls[asset.id]);
+    if (!missingAssets.length) return;
+
+    Promise.allSettled(
+      missingAssets.map(async (asset) => {
+        const response = await apiFetch<DownloadUrlResponse>(`/assets/${asset.id}/download-url`);
+        return [asset.id, response.download_url] as const;
+      })
+    ).then((results) => {
+      if (!isMounted) return;
+      const nextEntries = results
+        .filter((result): result is PromiseFulfilledResult<readonly [string, string]> => result.status === "fulfilled")
+        .map((result) => result.value);
+      if (nextEntries.length) {
+        setDownloadUrls((current) => ({ ...current, ...Object.fromEntries(nextEntries) }));
+      }
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [downloadUrls, finalVideoAssets, metadataAssets]);
+
+  useEffect(() => {
+    let isMounted = true;
+    setHighlightsMessage("");
+    setHighlightCandidates([]);
+    setSelectedHighlightIds([]);
+    setMetadataJson("");
+    if (!latestMetadata || !downloadUrls[latestMetadata.id]) return;
+
+    fetch(downloadUrls[latestMetadata.id], { cache: "no-store" })
+      .then((response) => {
+        if (!response.ok) throw new Error(`Unable to load highlights: ${response.status}`);
+        return response.json();
+      })
+      .then((payload) => {
+        if (!isMounted) return;
+        setMetadataJson(JSON.stringify(payload, null, 2));
+        const rows = Array.isArray(payload) ? payload : [payload];
+        const candidates = rows
+          .map((row, index) => parseHighlightCandidate(row, index))
+          .filter((candidate): candidate is HighlightCandidate => {
+            if (!candidate) return false;
+            return !selectedAsset || !candidate.sourceAssetId || candidate.sourceAssetId === selectedAsset.id;
+          });
+        setHighlightCandidates(candidates);
+        setSelectedHighlightIds(candidates.map((candidate) => candidate.id));
+        if (!candidates.length) setHighlightsMessage("No highlight candidates found for this source yet.");
+      })
+      .catch((error) => {
+        if (isMounted) setHighlightsMessage(error instanceof Error ? error.message : "Unable to load highlights.");
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [downloadUrls, latestMetadata, selectedAsset]);
+
   async function startWorkflow() {
     setBusy(true);
     setMessage("");
@@ -237,7 +314,8 @@ export function VideoClippingForm() {
         })
       });
       await refreshWorkspace(selectedWorkspace);
-      setMessage(`Video-clipping job queued: ${response.job_id}`);
+      setExpandedJobId(response.job_id);
+      setMessage(`Highlight analysis queued: ${response.job_id}`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Failed to start workflow");
     } finally {
@@ -245,43 +323,139 @@ export function VideoClippingForm() {
     }
   }
 
-  async function loadBucketWorkspaces() {
-    setBucketBusy(true);
-    setBucketMessage("");
+  async function exportSelectedHighlights() {
+    setBusy(true);
+    setMessage("");
     try {
-      const response = await apiFetch<VideoClippingBucketWorkspacesResponse>(
-        `/integrations/video-clipping-bucket/workspaces?bucket=${encodeURIComponent(bucketName)}`
-      );
-      setBucketWorkspaces(response.workspaces);
-      setBucketMessage(response.workspaces.length ? `Found ${response.workspaces.length} workspace folders.` : "No workspace folders found or bucket is not accessible.");
-    } catch (error) {
-      setBucketMessage(error instanceof Error ? error.message : "Unable to inspect bucket");
-    } finally {
-      setBucketBusy(false);
-    }
-  }
-
-  async function syncBucketWorkspace(nextWorkspace = workspaceId) {
-    setBucketBusy(true);
-    setBucketMessage("");
-    try {
-      const selectedWorkspace = await ensureSelectedWorkspace(nextWorkspace);
-      const response = await apiFetch<VideoClippingBucketSyncResponse>("/integrations/video-clipping-bucket/sync", {
+      const selectedWorkspace = await ensureSelectedWorkspace();
+      if (!selectedHighlights.length) throw new Error("Select at least one highlight to export.");
+      const response = await apiFetch<WorkflowResponse>("/workflows/video-clipping/render-selection", {
         method: "POST",
         body: JSON.stringify({
-          bucket: bucketName,
-          workspace_id: selectedWorkspace
+          workspace_id: selectedWorkspace,
+          source_asset_id: selectedAsset?.id,
+          highlights: selectedHighlights.map((candidate, index) => ({
+            ...candidate.raw,
+            rank: index + 1,
+            source_asset_id: candidate.sourceAssetId || selectedAsset?.id,
+            source_uri: String(candidate.raw.source_uri || selectedAsset?.gcs_uri || ""),
+            source_filename: String(candidate.raw.source_filename || selectedAsset?.filename || ""),
+            timestamp_start_end: candidate.range,
+          })),
+          language,
+          aspect_ratio: aspectRatio,
+          output_prefix: outputPrefix,
+          render_mode: exportMode,
         })
       });
       await refreshWorkspace(selectedWorkspace);
-      setWorkspaceId(selectedWorkspace);
-      setBucketMessage(
-        `Synced ${response.workspace_id}: ${response.imported} imported, ${response.updated} updated, ${response.skipped} skipped.`
-      );
+      setExpandedJobId(response.job_id);
+      setMessage(`Selected shorts export queued: ${response.job_id}`);
     } catch (error) {
-      setBucketMessage(error instanceof Error ? error.message : "Unable to sync bucket workspace");
+      setMessage(error instanceof Error ? error.message : "Failed to export selected highlights");
     } finally {
-      setBucketBusy(false);
+      setBusy(false);
+    }
+  }
+
+  function previewHighlight(candidate: HighlightCandidate) {
+    const video = sourceVideoRef.current;
+    if (!video) {
+      setMessage("Select or upload the source video to preview this highlight.");
+      return;
+    }
+    previewEndTimeRef.current = candidate.endSeconds;
+    video.currentTime = candidate.startSeconds;
+    video.play().catch(() => undefined);
+  }
+
+  function toggleHighlight(candidateId: string) {
+    setSelectedHighlightIds((current) =>
+      current.includes(candidateId) ? current.filter((id) => id !== candidateId) : [...current, candidateId]
+    );
+  }
+
+  async function switchWorkspace(nextWorkspaceId: string) {
+    const nextWorkspace = nextWorkspaceId.trim();
+    if (!nextWorkspace || nextWorkspace === workspaceId) return;
+    setWorkspaceId(nextWorkspace);
+    setAssetId("");
+    setFile(null);
+    setPreviewUrl("");
+    setPreviewError("");
+    setDownloadUrls({});
+    setHighlightCandidates([]);
+    setSelectedHighlightIds([]);
+    setMetadataJson("");
+    setMessage("");
+    window.history.replaceState(null, "", `/video-clipping?workspace=${encodeURIComponent(nextWorkspace)}`);
+    await refreshWorkspace(nextWorkspace);
+  }
+
+  async function toggleJobDetail(jobId: string) {
+    const nextExpanded = expandedJobId === jobId ? "" : jobId;
+    setExpandedJobId(nextExpanded);
+    setJobDetailMessage("");
+    if (!nextExpanded || jobDetailsById[jobId]) return;
+
+    await loadJobDetail(jobId);
+  }
+
+  async function loadJobDetail(jobId: string) {
+    setJobDetailMessage("");
+    setJobDetailBusy(jobId);
+    try {
+      const detail = await apiFetch<JobDetail>(`/jobs/${jobId}`);
+      setJobDetailsById((current) => ({ ...current, [jobId]: detail }));
+    } catch (error) {
+      setJobDetailMessage(error instanceof Error ? error.message : "Unable to load job details");
+    } finally {
+      setJobDetailBusy("");
+    }
+  }
+
+  async function deleteGeneratedAsset(asset: AssetRecord) {
+    const confirmed = window.confirm(`Delete ${assetDisplayName(asset)} from this workspace?`);
+    if (!confirmed) return;
+
+    setDeletingAssetId(asset.id);
+    setMessage("");
+    try {
+      await apiFetch<{ status: string }>(`/assets/${asset.id}`, { method: "DELETE" });
+      setDownloadUrls((current) => {
+        const next = { ...current };
+        delete next[asset.id];
+        return next;
+      });
+      await refreshWorkspace();
+      setMessage(`Deleted ${assetDisplayName(asset)}.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to delete generated asset");
+    } finally {
+      setDeletingAssetId("");
+    }
+  }
+
+  async function deleteSourceAsset(asset: AssetRecord) {
+    const confirmed = window.confirm(`Delete source video ${assetDisplayName(asset)} from this workspace? Generated outputs will not be deleted.`);
+    if (!confirmed) return;
+
+    setDeletingSourceId(asset.id);
+    setMessage("");
+    try {
+      await apiFetch<{ status: string }>(`/assets/${asset.id}`, { method: "DELETE" });
+      if (asset.id === assetId) {
+        const nextSource = sourceAssets.find((candidate) => candidate.id !== asset.id);
+        setAssetId(nextSource?.id || "");
+      }
+      setPreviewUrl("");
+      setPreviewError("");
+      await refreshWorkspace();
+      setMessage(`Deleted source video ${assetDisplayName(asset)}.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to delete source video");
+    } finally {
+      setDeletingSourceId("");
     }
   }
 
@@ -290,9 +464,9 @@ export function VideoClippingForm() {
       <section className="studio-command">
         <div>
           <div className="eyebrow">Video Clipping Lane</div>
-          <h1>Editorial review bench for owned footage</h1>
+          <h1>Prepare clips from one source video</h1>
           <p className="muted">
-            Select a source, review scene signals, shape the storyboard, and export a traceable social cut from one focused workspace.
+            Pick footage from this workspace, find candidate moments, then export the selected shorts as MP4s.
           </p>
         </div>
         <div className="command-actions">
@@ -300,183 +474,388 @@ export function VideoClippingForm() {
             <RefreshCw size={18} />
           </button>
           <button className="button" type="button" onClick={startWorkflow} disabled={busy || !workflowReady}>
-            {stageAction.icon} {stageAction.label}
+            <WandSparkles size={16} /> Find candidate shorts
           </button>
         </div>
       </section>
 
-      <WorkspaceContext workspaceId={workspaceId} />
+      <WorkspaceContext workspaceId={workspaceId} onSelectWorkspace={switchWorkspace} />
 
-      <section className="clipping-workstation" aria-label="Video clipping workstation">
-        <aside className="clip-stage-rail" aria-label="Production stages">
-          <div className="rail-heading">
-            <strong>Prima Studio</strong>
-            <span>Production flow</span>
-          </div>
-          {productionStages.map((stage) => (
-            <button
-              type="button"
-              key={stage.id}
-              className={activeStage === stage.id ? "production-stage active" : "production-stage"}
-              onClick={() => setActiveStage(stage.id)}
-            >
-              <span className="stage-icon">{stage.icon}</span>
-              <span className="production-stage-copy">
-                <strong>{stage.label}</strong>
-                <small>{stage.output}</small>
-              </span>
-            </button>
-          ))}
-        </aside>
-
-        <main className="review-surface">
-          <div className="review-surface-header">
-            <div>
-              <div className="eyebrow">{activeStageMeta.legacy}</div>
-              <h2>{activeStageMeta.label}: {activeStageMeta.output}</h2>
-            </div>
-            <span className="timecode">01:12:04</span>
-          </div>
-
-          <div className="video-review-canvas">
-            <div className="video-frame">
-              <div className="frame-status-bar">
-                <span>{selectedAsset ? "Source locked" : "No source selected"}</span>
-                <span>{aspectRatio} review</span>
-              </div>
-              <div className="video-frame-copy">
-                <strong>{selectedAsset?.filename || filename}</strong>
-                <span>{selectedAsset ? "Ready for scene intelligence and cut review." : "Choose a workspace source to enable the workflow."}</span>
-              </div>
-              <div className="editor-timeline" aria-label="Review timeline">
-                <div className="timeline-ruler">
-                  <span>00:00</span>
-                  <span>01:00</span>
-                  <span>02:00</span>
-                  <span>03:00</span>
-                </div>
-                <div className="video-playhead">
-                  <span className="clip-marker marker-one" />
-                  <span className="clip-marker marker-two" />
-                  <span className="clip-marker marker-three" />
-                  <strong />
-                </div>
-                <div className="timeline-beats">
-                  {storyboardBeats.map((beat) => <span key={beat.label}>{beat.label}</span>)}
-                </div>
-              </div>
-            </div>
-            <div className="review-meta-strip">
-              <span><strong>{sourceAssets.length}</strong> sources</span>
-              <span><strong>{metadataAssets.length || sceneInsights.length}</strong> scene signals</span>
-              <span><strong>{clipAssets.length || clipCandidates.length}</strong> candidates</span>
-              <span><strong>{finalVideoAssets.length}</strong> finals</span>
-            </div>
-          </div>
-
-          {renderActiveStage()}
-        </main>
-
-        <aside className="assembly-panel" aria-label="Storyboard and export">
-          <div>
-            <div className="eyebrow">Assemble</div>
-            <h2>Storyboard</h2>
-          </div>
-          <div className="stage-next-action">
-            <span>{activeStageMeta.label}</span>
-            <strong>{stageAction.label}</strong>
-          </div>
-          <div className="storyboard-list">
-            {storyboardBeats.map((beat, index) => (
-              <div className="storyboard-card" key={beat.label}>
-                <strong>{index + 1}. {beat.label}</strong>
-                <span>{beat.range}</span>
-              </div>
-            ))}
-          </div>
-          <div className="export-summary">
-            <strong>58s review cut</strong>
-            <span>Portrait-first review cut with source, metadata, and render trail preserved.</span>
-          </div>
-          <button className="button" type="button" onClick={startWorkflow} disabled={busy || !workflowReady}>
-            {stageAction.icon} {stageAction.label}
+      <section className={sourceDrawerOpen ? "clipping-flow" : "clipping-flow source-drawer-collapsed"} aria-label="Video clipping workflow">
+        <aside className="clipping-source-panel" aria-label="Source footage">
+          <button
+            className="source-drawer-tab"
+            type="button"
+            onClick={() => setSourceDrawerOpen((current) => !current)}
+            aria-expanded={sourceDrawerOpen}
+            title={sourceDrawerOpen ? "Hide source drawer" : "Show source drawer"}
+          >
+            <FileVideo size={18} />
+            <span>{selectedAsset ? assetDisplayName(selectedAsset) : "Source"}</span>
           </button>
-          {latestJob ? (
-            <Link className="button secondary" href={`/jobs/${latestJob.id}`}>
-              Open latest job
-            </Link>
+
+          {sourceDrawerOpen ? (
+          <section className="source-video-panel">
+            <header className="source-video-heading">
+              <span>
+                <strong>Source Video</strong>
+                <small>{selectedAsset ? assetDisplayName(selectedAsset) : file ? file.name : "No episode selected"}</small>
+              </span>
+              <button className="icon-button" type="button" onClick={() => setSourceDrawerOpen(false)} aria-label="Collapse source drawer" title="Collapse source drawer">
+                <ChevronDown size={18} />
+              </button>
+            </header>
+
+            <div className="source-video-body">
+              {selectedAsset ? (
+                <div className="selected-source-card">
+                  <FileVideo size={18} />
+                  <span>
+                    <strong>{assetDisplayName(selectedAsset)}</strong>
+                    <small>{shortStoragePath(selectedAsset.gcs_uri, selectedAsset)}</small>
+                  </span>
+                  <button
+                    className="icon-button danger source-delete-button"
+                    type="button"
+                    onClick={() => deleteSourceAsset(selectedAsset)}
+                    disabled={deletingSourceId === selectedAsset.id}
+                    aria-label={`Delete source video ${assetDisplayName(selectedAsset)}`}
+                    title="Delete source video"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              ) : null}
+
+              <div className={selectedAsset ? "upload-drop compact-upload source-change-drop" : "upload-drop editorial-upload compact-upload"}>
+                <UploadCloud size={selectedAsset ? 18 : 24} />
+                <strong>{file ? file.name : selectedAsset ? "Change source file" : "Upload episode video"}</strong>
+                <input
+                  id="file"
+                  type="file"
+                  accept="video/*"
+                  onChange={(event) => {
+                    const selected = event.target.files?.[0] || null;
+                    setFile(selected);
+                    if (selected) setFilename(selected.name);
+                  }}
+                />
+              </div>
+
+              {file ? (
+                <button className="button secondary" type="button" onClick={registerOrUploadAsset} disabled={busy}>
+                  <UploadCloud size={16} /> Upload source
+                </button>
+              ) : null}
+
+              {sourceAssets.length > 1 ? (
+                <details className="technical-details source-library">
+                  <summary>Other source videos</summary>
+                  <div className="search-field compact">
+                    <Search size={16} />
+                    <input
+                      id="source-search"
+                      value={assetQuery}
+                      onChange={(event) => setAssetQuery(event.target.value)}
+                      placeholder="Search source videos"
+                    />
+                  </div>
+                  <div className="asset-list compact-asset-list source-picker">
+                    {filteredSourceAssets.slice(0, 8).map((asset) => (
+                      <div className={asset.id === assetId ? "asset-item selected source-asset-row" : "asset-item source-asset-row"} key={asset.id}>
+                        <button className="asset-select-button" type="button" onClick={() => setAssetId(asset.id)}>
+                          <FileVideo size={16} />
+                          <span>
+                            <strong>{assetDisplayName(asset)}</strong>
+                            <small>{shortStoragePath(asset.gcs_uri, asset)}</small>
+                          </span>
+                        </button>
+                        <button
+                          className="icon-button danger source-delete-button"
+                          type="button"
+                          onClick={() => deleteSourceAsset(asset)}
+                          disabled={deletingSourceId === asset.id}
+                          aria-label={`Delete source video ${assetDisplayName(asset)}`}
+                          title="Delete source video"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              ) : null}
+
+              <details className="technical-details source-library">
+                <summary>Register existing file</summary>
+                <div className="field">
+                  <label htmlFor="filename">Source filename</label>
+                  <input
+                    ref={filenameInputRef}
+                    id="filename"
+                    value={filename}
+                    onFocus={(event) => {
+                      keepFilenameFocusRef.current = true;
+                      filenameSelectionRef.current = {
+                        start: event.currentTarget.selectionStart ?? event.currentTarget.value.length,
+                        end: event.currentTarget.selectionEnd ?? event.currentTarget.value.length,
+                      };
+                    }}
+                    onBlur={(event) => {
+                      if (event.relatedTarget) keepFilenameFocusRef.current = false;
+                    }}
+                    onChange={(event) => {
+                      keepFilenameFocusRef.current = true;
+                      filenameSelectionRef.current = {
+                        start: event.currentTarget.selectionStart ?? event.currentTarget.value.length,
+                        end: event.currentTarget.selectionEnd ?? event.currentTarget.value.length,
+                      };
+                      setFilename(event.target.value);
+                    }}
+                    onKeyUp={(event) => {
+                      filenameSelectionRef.current = {
+                        start: event.currentTarget.selectionStart ?? event.currentTarget.value.length,
+                        end: event.currentTarget.selectionEnd ?? event.currentTarget.value.length,
+                      };
+                    }}
+                  />
+                </div>
+                <button className="button secondary" type="button" onClick={registerOrUploadAsset} disabled={busy || !filename}>
+                  <UploadCloud size={16} /> Register source
+                </button>
+              </details>
+            </div>
+          </section>
           ) : null}
         </aside>
-      </section>
 
-      <section className="provenance-drawer">
-        <div className="side-heading">
-          <ClipboardCheck size={18} />
-          <h2>Provenance and workspace control</h2>
-        </div>
-        <div className="provenance-grid">
-          <div className="bucket-sync">
-            <div className="field">
-              <label htmlFor="bucket-name">Existing GCS bucket</label>
-              <input id="bucket-name" value={bucketName} onChange={(event) => setBucketName(event.target.value)} />
+        <main className="clipping-review-panel">
+          <div className="review-surface-header">
+            <div>
+              <div className="eyebrow">Review Source</div>
+              <h2>{selectedAsset ? assetDisplayName(selectedAsset) : "Select footage to begin"}</h2>
             </div>
-            <div className="actions">
-              <button className="button secondary" type="button" onClick={loadBucketWorkspaces} disabled={bucketBusy || !bucketName.trim()}>
-                Inspect
-              </button>
-              <button className="button secondary" type="button" onClick={() => syncBucketWorkspace()} disabled={bucketBusy || !bucketName.trim() || !workspaceId.trim()}>
-                Sync workspace
-              </button>
+            <span className="review-badge">{aspectRatio}</span>
+          </div>
+
+          <div className="source-preview">
+            {previewUrl ? (
+              <video ref={sourceVideoRef} src={previewUrl} controls preload="metadata" />
+            ) : (
+              <div className="source-empty-preview">
+                <FileVideo size={34} />
+                <strong>{selectedAsset ? "Source selected" : "No source selected"}</strong>
+                <span>
+                  {selectedAsset
+                    ? previewError || "Preview will appear when a playable source URL is available."
+                    : "Choose a source video from this workspace."}
+                </span>
+              </div>
+            )}
+          </div>
+
+          <section className="clipping-actions-panel highlight-workbench" aria-label="Highlight review">
+            <div className="highlight-toolbar">
+              <span>
+                <strong>{selectedAsset ? "Candidate shorts" : "Select a source first"}</strong>
+                <small>
+                  {selectedAsset
+                    ? "Find candidates creates timestamped suggestions below. Export selected shorts creates MP4s in the output panel."
+                    : "The analysis job needs one source video."}
+                </small>
+              </span>
+              <div className="highlight-toolbar-actions">
+                {highlightCandidates.length ? (
+                  <span>{selectedHighlights.length} of {highlightCandidates.length} selected</span>
+                ) : null}
+                <button className="button primary-cta" type="button" onClick={startWorkflow} disabled={busy || !workflowReady}>
+                  <WandSparkles size={16} /> Find candidate shorts
+                </button>
+              </div>
             </div>
-            {bucketWorkspaces.length ? (
-              <div className="workspace-options compact-options">
-                {bucketWorkspaces.slice(0, 8).map((workspace) => (
-                  <button type="button" key={workspace} onClick={() => syncBucketWorkspace(workspace)}>
-                    {workspace}
-                  </button>
+
+            {highlightCandidates.length ? (
+              <div className="highlight-list">
+                {highlightCandidates.map((candidate) => (
+                  <article className={selectedHighlightIds.includes(candidate.id) ? "highlight-card selected" : "highlight-card"} key={candidate.id}>
+                    <label className="highlight-check">
+                      <input
+                        type="checkbox"
+                        checked={selectedHighlightIds.includes(candidate.id)}
+                        onChange={() => toggleHighlight(candidate.id)}
+                      />
+                      <span>{candidate.range}</span>
+                    </label>
+                    <div className="highlight-copy">
+                      <strong>{candidate.title}</strong>
+                      <p>{candidate.rationale}</p>
+                      <small>{candidate.category || candidate.tone}</small>
+                    </div>
+                    <button
+                      className="button secondary inline-action"
+                      type="button"
+                      onClick={() => previewHighlight(candidate)}
+                      disabled={!previewUrl || !selectedAsset}
+                      title={previewUrl && selectedAsset ? "Preview this moment in the source video" : "Select or upload the source video to preview"}
+                    >
+                      <PlayCircle size={16} /> Preview
+                    </button>
+                  </article>
                 ))}
               </div>
-            ) : null}
-            {bucketMessage ? <p className="muted code">{bucketMessage}</p> : null}
-          </div>
-
-          <div className="artifact-counts">
-            {artifactKinds.map((item) => (
-              <div className="artifact-count" key={item.kind}>
-                <span>
-                  {item.icon}
-                  {item.label}
-                </span>
-                <strong>{assetsByKind[item.kind]?.length || 0}</strong>
+            ) : (
+              <div className="empty-state compact-empty">
+                {highlightsMessage || "Candidate cards will appear here after analysis finishes."}
               </div>
-            ))}
-          </div>
+            )}
 
-          <div className="pipeline-list">
-            <span>Source video</span>
-            <span>Scene intelligence</span>
-            <span>Candidate clips</span>
-            <span>Storyboard cut</span>
-            <span>Final export</span>
-          </div>
-        </div>
+            {latestMetadata ? (
+              <details className="technical-details">
+                <summary>Technical analysis file</summary>
+                <div className="output-summary inline-output-summary">
+                  <FileText size={18} />
+                  <span>
+                    <strong>{highlightCandidates.length || "Scene"} candidate{highlightCandidates.length === 1 ? "" : "s"} parsed from Gemini</strong>
+                    <small>{shortStoragePath(latestMetadata.gcs_uri, latestMetadata)}</small>
+                  </span>
+                  {downloadUrls[latestMetadata.id] ? (
+                    <Link className="button secondary inline-action" href={downloadUrls[latestMetadata.id]} target="_blank">
+                      <Download size={16} /> Open JSON
+                    </Link>
+                  ) : null}
+                </div>
+                {metadataJson ? (
+                  <pre className="metadata-json-preview">{metadataJson}</pre>
+                ) : null}
+              </details>
+            ) : null}
+
+            <details className="technical-details">
+              <summary>Advanced job settings</summary>
+              <div className="field">
+                <label htmlFor="language">Language</label>
+                <select id="language" value={language} onChange={(event) => setLanguage(event.target.value)}>
+                  <option value="ms-MY">Malay</option>
+                  <option value="en-MY">English</option>
+                </select>
+              </div>
+              <div className="field">
+                <label htmlFor="metadata-prompt">Analysis prompt</label>
+                <textarea id="metadata-prompt" value={prompt} onChange={(event) => setPrompt(event.target.value)} />
+              </div>
+              <div className="field">
+                <label htmlFor="metadata-output-prefix">Output prefix</label>
+                <input id="metadata-output-prefix" value={outputPrefix} onChange={(event) => setOutputPrefix(event.target.value)} />
+              </div>
+            </details>
+            {message ? <p className="muted code">{message}</p> : null}
+          </section>
+        </main>
+
+        <aside className="clipping-output-panel" aria-label="Clip review and export">
+          <Panel title="Short Outputs">
+            <p className="muted panel-note">Only exported MP4s appear here. Candidate suggestions stay under the source review until you export them.</p>
+            <div className="field">
+              <label htmlFor="aspect">Export shape</label>
+              <select id="aspect" value={aspectRatio} onChange={(event) => setAspectRatio(event.target.value)}>
+                <option value="9:16">9:16 portrait</option>
+                <option value="16:9">16:9 landscape</option>
+                <option value="1:1">1:1 square</option>
+              </select>
+            </div>
+            <div className="field">
+              <label htmlFor="export-mode">Export mode</label>
+              <select id="export-mode" value={exportMode} onChange={(event) => setExportMode(event.target.value as "individual" | "joined")}>
+                <option value="individual">Separate MP4 for each candidate</option>
+                <option value="joined">One stitched MP4 from selected candidates</option>
+              </select>
+            </div>
+            <button className="button" type="button" onClick={exportSelectedHighlights} disabled={busy || !selectedHighlights.length}>
+              <Video size={16} /> {exportMode === "joined" ? "Export stitched short" : "Export selected shorts"}
+            </button>
+            {latestFinalVideo ? (
+              <>
+                {latestFinalVideoUrl ? (
+                  <video className="review-cut-preview" src={latestFinalVideoUrl} controls preload="metadata" />
+                ) : null}
+                <div className="export-summary">
+                  <strong>{assetDisplayName(latestFinalVideo)}</strong>
+                  <span>{shortStoragePath(latestFinalVideo.gcs_uri, latestFinalVideo)}</span>
+                </div>
+                {finalVideoAssets.length > 1 ? (
+                  <div className="short-output-list">
+                    {finalVideoAssets.slice(0, 5).map((asset) => (
+                      <div className="short-output-row" key={asset.id}>
+                        <span>
+                          <strong>{assetDisplayName(asset)}</strong>
+                          <small>{new Date(asset.created_at).toLocaleString()}</small>
+                        </span>
+                        {downloadUrls[asset.id] ? (
+                          <Link className="button secondary inline-action" href={downloadUrls[asset.id]} target="_blank">
+                            <Download size={16} /> Download
+                          </Link>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+                {latestFinalVideoUrl ? (
+                  <div className="actions tight-actions">
+                    <Link className="button" href={latestFinalVideoUrl} target="_blank">
+                      <Download size={16} /> Download latest short
+                    </Link>
+                    <button
+                      className="button danger"
+                      type="button"
+                      onClick={() => deleteGeneratedAsset(latestFinalVideo)}
+                      disabled={deletingAssetId === latestFinalVideo.id}
+                    >
+                      <Trash2 size={16} /> Delete latest short
+                    </button>
+                  </div>
+                ) : null}
+              </>
+            ) : (
+              <>
+                <div className="empty-state compact-empty">Select candidate shorts and export them here.</div>
+                <button className="button" type="button" onClick={startWorkflow} disabled={busy || !workflowReady}>
+                  <Video size={16} /> Find candidate shorts
+                </button>
+              </>
+            )}
+            {latestJob ? (
+              <button className="button secondary" type="button" onClick={() => toggleJobDetail(latestJob.id)}>
+                Inspect latest job
+              </button>
+            ) : null}
+          </Panel>
+        </aside>
       </section>
 
       <section className="list-panel">
         <div className="section-heading">
           <h2>Recent video-clipping jobs</h2>
-          <p className="muted">Open a job to review events, output assets, provenance, and rendered videos.</p>
+          <p className="muted">Expand a job to inspect events, outputs, and rerun context without leaving this workflow.</p>
         </div>
+        {jobDetailMessage ? <p className="muted code inline-panel-message">{jobDetailMessage}</p> : null}
         {jobs.length ? (
           jobs.slice(0, 8).map((job) => (
-            <Link className="job-row" href={`/jobs/${job.id}`} key={job.id}>
-              <span className="job-kind">
-                <CheckCircle2 size={16} />
-                {job.id}
-              </span>
-              <span>{new Date(job.created_at).toLocaleString()}</span>
-              <StatusPill status={job.status} />
-            </Link>
+            <article className="job-accordion-item" key={job.id}>
+              <button className="job-toggle" type="button" onClick={() => toggleJobDetail(job.id)} aria-expanded={expandedJobId === job.id}>
+                <span className="job-kind">
+                  <CheckCircle2 size={16} />
+                  {job.id}
+                </span>
+                <span className="job-meta">
+                  <span>{new Date(job.created_at).toLocaleString()}</span>
+                  <StatusPill status={job.status} />
+                  <ChevronDown size={18} className={expandedJobId === job.id ? "rotate-up" : ""} />
+                </span>
+              </button>
+              {expandedJobId === job.id ? (
+                <JobDetailPanel job={job} detail={jobDetailsById[job.id]} isBusy={jobDetailBusy === job.id} />
+              ) : null}
+            </article>
           ))
         ) : (
           <div className="empty-state">No video-clipping jobs yet.</div>
@@ -484,275 +863,6 @@ export function VideoClippingForm() {
       </section>
     </>
   );
-
-  function renderActiveStage() {
-    if (activeStage === "metadata") return renderAnalyzeStage();
-    if (activeStage === "clips") return renderSelectStage();
-    if (activeStage === "joining") return renderAssembleStage();
-    if (activeStage === "ai") return renderExportStage();
-    return renderIngestStage();
-  }
-
-  function renderIngestStage() {
-    return (
-      <div className="production-grid three">
-        <Panel title="Source Footage">
-          <div className="upload-drop editorial-upload">
-            <UploadCloud size={28} />
-            <strong>Upload owned footage</strong>
-            <span className="muted">MP4, MOV, or broadcast exports for clipping review.</span>
-            <input
-              id="file"
-              type="file"
-              accept="video/*"
-              onChange={(event) => {
-                const selected = event.target.files?.[0] || null;
-                setFile(selected);
-                if (selected) setFilename(selected.name);
-              }}
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="filename">Register filename</label>
-            <input id="filename" value={filename} onChange={(event) => setFilename(event.target.value)} />
-          </div>
-          <button className="button secondary" type="button" onClick={registerOrUploadAsset} disabled={busy || (!filename && !file)}>
-            <UploadCloud size={16} /> {file ? "Upload source" : "Register source"}
-          </button>
-          {selectedAsset ? <SelectedAsset asset={selectedAsset} /> : null}
-        </Panel>
-
-        <Panel title="Workspace Sources">
-          <div className="search-field compact">
-            <Search size={16} />
-            <input
-              id="source-search"
-              value={assetQuery}
-              onChange={(event) => setAssetQuery(event.target.value)}
-              placeholder="Search source assets"
-            />
-          </div>
-          <div className="asset-list compact-asset-list">
-            {filteredSourceAssets.slice(0, 6).map((asset) => (
-              <button
-                className={asset.id === assetId ? "asset-item selected" : "asset-item"}
-                type="button"
-                key={asset.id}
-                onClick={() => setAssetId(asset.id)}
-              >
-                <FileVideo size={16} />
-                <span>
-                  <strong>{asset.filename}</strong>
-                  <small>{asset.gcs_uri}</small>
-                </span>
-              </button>
-            ))}
-            {!filteredSourceAssets.length ? <p className="muted">No source videos found in this workspace.</p> : null}
-          </div>
-        </Panel>
-
-        <Panel title="Split Settings">
-          <div className={workflowReady ? "readiness-card ready" : "readiness-card"}>
-            <CheckSquare size={18} />
-            <span>
-              <strong>{workflowReady ? "Source selected" : "Select a source to continue"}</strong>
-              <small>{selectedAsset?.filename || "Pick an owned video from Workspace Sources."}</small>
-            </span>
-          </div>
-          <div className="field-grid compact-grid">
-            <div className="field">
-              <label htmlFor="duration">Segment duration</label>
-              <input
-                id="duration"
-                type="number"
-                min={10}
-                max={600}
-                value={segmentDuration}
-                onChange={(event) => setSegmentDuration(Number(event.target.value))}
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="aspect">Aspect ratio</label>
-              <select id="aspect" value={aspectRatio} onChange={(event) => setAspectRatio(event.target.value)}>
-                <option value="9:16">9:16 portrait</option>
-                <option value="16:9">16:9 landscape</option>
-                <option value="1:1">1:1 square</option>
-              </select>
-            </div>
-          </div>
-          <details className="technical-details">
-            <summary>Asset details</summary>
-            <div className="field">
-              <label htmlFor="asset">Selected source asset ID</label>
-              <input id="asset" value={assetId} onChange={(event) => setAssetId(event.target.value)} />
-            </div>
-          </details>
-          <button className="button" type="button" onClick={startWorkflow} disabled={busy || !workflowReady}>
-            <WandSparkles size={16} /> Analyze source
-          </button>
-          {message ? <p className="muted code">{message}</p> : null}
-        </Panel>
-      </div>
-    );
-  }
-
-  function renderAnalyzeStage() {
-    return (
-      <div className="production-grid two">
-        <Panel title="Scene Intelligence">
-          <div className="scene-intelligence-list">
-            {sceneInsights.map((scene) => (
-              <div className="scene-intelligence-row" key={scene.timecode}>
-                <span className="timecode">{scene.timecode}</span>
-                <span>
-                  <strong>{scene.title}</strong>
-                  <small>{scene.speaker} - {scene.range} - {scene.summary}</small>
-                </span>
-                <strong className="signal-score">{scene.score}</strong>
-              </div>
-            ))}
-          </div>
-        </Panel>
-
-        <Panel title="Metadata Controls">
-          <div className="field">
-            <label htmlFor="metadata-prompt">Analysis prompt</label>
-            <textarea id="metadata-prompt" value={prompt} onChange={(event) => setPrompt(event.target.value)} />
-          </div>
-          <div className="field-grid compact-grid">
-            <div className="field">
-              <label htmlFor="language">Language</label>
-              <select id="language" value={language} onChange={(event) => setLanguage(event.target.value)}>
-                <option value="ms-MY">Malay</option>
-                <option value="en-MY">English</option>
-              </select>
-            </div>
-            <div className="field">
-              <label htmlFor="metadata-output-prefix">Output prefix</label>
-              <input id="metadata-output-prefix" value={outputPrefix} onChange={(event) => setOutputPrefix(event.target.value)} />
-            </div>
-          </div>
-          <button className="button" type="button" onClick={startWorkflow} disabled={busy || !workflowReady}>
-            <Scissors size={16} /> Create candidate cut
-          </button>
-          {metadataAssets.length ? <AssetTable assets={metadataAssets} emptyLabel="No metadata JSON has been generated yet." /> : null}
-        </Panel>
-      </div>
-    );
-  }
-
-  function renderSelectStage() {
-    return (
-      <div className="production-grid two">
-        <Panel title="AI Clip Candidates">
-          <div className="clip-candidate-grid">
-            {clipCandidates.map((candidate) => (
-              <article className="clip-candidate-card" key={candidate.title}>
-                <div className="clip-thumb">
-                  <PlayCircle size={22} />
-                  <span>{candidate.range}</span>
-                </div>
-                <div className="clip-candidate-body">
-                  <div className="chip-row">
-                    <span className="chip signal">{candidate.score} score</span>
-                    <span className="chip">{candidate.duration}</span>
-                    {candidate.tags.map((tag) => <span className="chip" key={tag}>{tag}</span>)}
-                  </div>
-                  <h3>{candidate.title}</h3>
-                  <p>Why this clip: {candidate.reason}</p>
-                  <div className="actions">
-                    <button className="button secondary" type="button">Preview</button>
-                    <button className="button secondary" type="button" disabled title="Clip-stage endpoint required">
-                      Selected
-                    </button>
-                  </div>
-                </div>
-              </article>
-            ))}
-          </div>
-        </Panel>
-
-        <Panel title="Selected Clip Assets">
-          <AssetTable assets={clipAssets} emptyLabel="Clip assets will appear after clip generation." />
-          <button className="button" type="button" disabled title="Clip-stage endpoint required">
-            <Scissors size={16} /> Render selected clips
-          </button>
-        </Panel>
-      </div>
-    );
-  }
-
-  function renderAssembleStage() {
-    return (
-      <div className="production-grid two">
-        <Panel title="Clip Order">
-          <div className="storyboard-strip">
-            {storyboardBeats.map((beat, index) => (
-              <div className="storyboard-card" key={beat.label}>
-                <strong>{index + 1}. {beat.label}</strong>
-                <span>{beat.range}</span>
-              </div>
-            ))}
-          </div>
-          <AssetTable assets={clipAssets} emptyLabel="Clip assets will appear after manual clip generation." />
-          <button className="button" type="button" disabled title="Join-stage endpoint required">
-            <ListChecks size={16} /> Assemble storyboard
-          </button>
-        </Panel>
-
-        <Panel title="Final Outputs">
-          <AssetTable assets={finalVideoAssets} emptyLabel="Final video outputs will appear here after render." />
-          {latestJob ? (
-            <Link className="button secondary inline-action" href={`/jobs/${latestJob.id}`}>
-              Open latest job
-            </Link>
-          ) : null}
-        </Panel>
-      </div>
-    );
-  }
-
-  function renderExportStage() {
-    return (
-      <div className="production-grid two">
-        <Panel title="AI Review Package">
-          <div className="field">
-            <label htmlFor="ai-prompt">Clip plan prompt</label>
-            <textarea id="ai-prompt" value={prompt} onChange={(event) => setPrompt(event.target.value)} />
-          </div>
-          <div className="review-grid">
-            <ReviewItem label="Input" value="Scene intelligence" />
-            <ReviewItem label="Review gate" value="Editable AI clip plan" />
-            <ReviewItem label="Default output" value={`${aspectRatio} final review cut`} />
-          </div>
-          <div className="actions">
-            <button className="button" type="button" disabled title="AI-plan endpoint required">
-              <Bot size={16} /> Generate AI plan
-            </button>
-            <button className="button secondary" type="button" onClick={startWorkflow} disabled={busy || !workflowReady}>
-              <Video size={16} /> Export review cut
-            </button>
-          </div>
-        </Panel>
-
-        <Panel title="Export Provenance">
-          <AssetTable assets={finalVideoAssets.length ? finalVideoAssets : metadataAssets} emptyLabel="Final exports and metadata will appear here." />
-          <div className="approval-card">
-            <strong>{latestFinalVideo ? "Final video ready" : "Approval trail"}</strong>
-            <span>{latestFinalVideo?.filename || "Source video > scene intelligence > reviewed storyboard > final render"}</span>
-          </div>
-        </Panel>
-      </div>
-    );
-  }
-
-  function getStageAction() {
-    if (activeStage === "split") return { label: "Analyze source", icon: <WandSparkles size={16} /> };
-    if (activeStage === "metadata") return { label: "Create candidate cut", icon: <Scissors size={16} /> };
-    if (activeStage === "clips") return { label: "Render selected clips", icon: <Scissors size={16} /> };
-    if (activeStage === "joining") return { label: "Assemble review cut", icon: <ListChecks size={16} /> };
-    return { label: "Export review cut", icon: <Video size={16} /> };
-  }
 
   function Panel({ title, children }: { title: string; children: React.ReactNode }) {
     return (
@@ -762,27 +872,6 @@ export function VideoClippingForm() {
         </div>
         {children}
       </article>
-    );
-  }
-
-  function SelectedAsset({ asset }: { asset: AssetRecord }) {
-    return (
-      <div className="selected-asset">
-        <FileVideo size={16} />
-        <span>
-          <strong>{asset.filename}</strong>
-          <small>{asset.gcs_uri}</small>
-        </span>
-      </div>
-    );
-  }
-
-  function ReviewItem({ label, value }: { label: string; value: string }) {
-    return (
-      <div>
-        <span>{label}</span>
-        <strong>{value}</strong>
-      </div>
     );
   }
 
@@ -800,8 +889,8 @@ export function VideoClippingForm() {
           <div className="asset-table-row" key={asset.id}>
             <span>{asset.kind}</span>
             <span>
-              <strong>{asset.filename}</strong>
-              <small>{asset.gcs_uri}</small>
+              <strong>{assetDisplayName(asset)}</strong>
+              <small>{shortStoragePath(asset.gcs_uri, asset)}</small>
             </span>
             <span>{new Date(asset.created_at).toLocaleString()}</span>
           </div>
@@ -809,15 +898,242 @@ export function VideoClippingForm() {
       </div>
     );
   }
+
+  function JobDetailPanel({ job, detail, isBusy }: { job: JobRecord; detail?: JobDetail; isBusy: boolean }) {
+    const row = detail || job;
+    const events = detail?.events || [];
+    const outputs = detail?.outputs || [];
+
+    return (
+      <div className="job-detail-panel">
+        <div className="job-detail-grid">
+          <InfoTile label="Status" value={row.status} />
+          <InfoTile label="Aspect" value={row.aspect_ratio} />
+          <InfoTile label="Language" value={row.language} />
+          <InfoTile label="Input" value={row.input_asset_ids.length ? row.input_asset_ids.join(", ") : "No input asset recorded"} />
+          <InfoTile label="Output prefix" value={row.output_prefix} />
+          <InfoTile label="Updated" value={new Date(row.updated_at).toLocaleString()} />
+        </div>
+
+        {row.error ? (
+          <div className="job-error">
+            <strong>Error</strong>
+            <span>{row.error}</span>
+          </div>
+        ) : null}
+
+        {isBusy ? <div className="empty-state compact-empty">Loading job events and outputs...</div> : null}
+
+        {!isBusy ? (
+          <div className="job-detail-columns">
+            <section className="job-detail-section">
+              <h3>Events</h3>
+              {events.length ? (
+                <div className="job-event-list">
+                  {events.map((event) => (
+                    <div className="job-event" key={event.id}>
+                      <strong>{event.step}</strong>
+                      <span>
+                        {event.message}
+                        {event.payload?.metadata?.render_backend ? (
+                          <small>Backend: {String(event.payload.metadata.render_backend)}</small>
+                        ) : null}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="empty-state compact-empty">No events recorded yet.</div>
+              )}
+            </section>
+
+            <section className="job-detail-section">
+              <h3>Outputs</h3>
+              {outputs.length ? (
+                <div className="job-output-list">
+                  {outputs.map((asset) => (
+                    <div className="job-output" key={asset.id}>
+                      <strong>{asset.kind}</strong>
+                      <span>
+                        {assetDisplayName(asset)}
+                        <small>{shortStoragePath(asset.gcs_uri, asset)}</small>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="empty-state compact-empty">Outputs will appear as the job completes.</div>
+              )}
+            </section>
+          </div>
+        ) : null}
+
+        <div className="actions">
+          <button className="button secondary" type="button" onClick={() => loadJobDetail(job.id)} disabled={isBusy}>
+            <RefreshCw size={16} /> Refresh details
+          </button>
+          <Link className="button secondary" href={`/jobs/${job.id}`}>
+            Open full page
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  function InfoTile({ label, value }: { label: string; value: string }) {
+    return (
+      <div className="info-tile">
+        <span>{label}</span>
+        <strong>{value}</strong>
+      </div>
+    );
+  }
 }
 
-function WorkspaceContext({ workspaceId }: { workspaceId: string }) {
+function assetDisplayName(asset: AssetRecord) {
+  if (asset.kind === "metadata") return "Scene metadata JSON";
+  if (asset.kind === "final_video") return "Short MP4";
+  return friendlyName(asset.filename);
+}
+
+function friendlyName(value: string) {
+  const basename = value.split("/").pop() || value;
+  const withoutHashPrefix = basename.replace(/^[a-z0-9]+_[^[]*\[FULL\]_?/i, "");
+  return withoutHashPrefix
+    .replace(/_{2,}/g, " ")
+    .replace(/_/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function shortStoragePath(uri: string, asset?: AssetRecord) {
+  if (asset?.kind === "source_video") return `uploads/${friendlyName(asset.filename)}`;
+  if (asset?.kind === "metadata") return "outputs/video-clipping/metadata.json";
+  if (asset?.kind === "final_video") return "outputs/video-clipping/short.mp4";
+  return uri.replace(/^gs:\/\/[^/]+\//, "").replace(/^local-bucket\//, "");
+}
+
+function parseHighlightCandidate(row: unknown, index: number): HighlightCandidate | null {
+  if (!row || typeof row !== "object") return null;
+  const raw = row as Record<string, unknown>;
+  const range = String(raw.timestamp_start_end || "");
+  const parsedRange = parseTimestampRange(range);
+  if (!parsedRange) return null;
+  const title =
+    String(raw.brief_scene_description || raw.title || raw.scene_title || `Highlight ${index + 1}`).trim() ||
+    `Highlight ${index + 1}`;
+  const rationale = String(raw.editor_note_clip_rationale || raw.rationale || raw.reason || "").trim();
+  const sourceAssetId = String(raw.source_asset_id || "");
+  return {
+    id: `${sourceAssetId || "source"}:${range}:${index}`,
+    range,
+    startSeconds: parsedRange.start,
+    endSeconds: parsedRange.end,
+    title,
+    rationale,
+    tone: String(raw.dominant_emotional_tone_impact || "").trim(),
+    category: String(raw.trailer_potential_category || "").trim(),
+    sourceAssetId,
+    raw,
+  };
+}
+
+function parseTimestampRange(value: string) {
+  if (!value.includes(" - ")) return null;
+  const [startText, endText] = value.split(" - ", 2);
+  const start = parseTimestamp(startText);
+  const end = parseTimestamp(endText);
+  if (start === null || end === null || end <= start) return null;
+  return { start, end };
+}
+
+function parseTimestamp(value: string) {
+  const parts = value.trim().split(":").map((part) => Number(part));
+  if (parts.length !== 3 || parts.some((part) => !Number.isFinite(part) || part < 0)) return null;
+  return parts[0] * 3600 + parts[1] * 60 + parts[2];
+}
+
+function WorkspaceContext({ workspaceId, onSelectWorkspace }: { workspaceId: string; onSelectWorkspace: (workspaceId: string) => void }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [workspaces, setWorkspaces] = useState<WorkspaceRecord[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const filteredWorkspaces = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    return workspaces.filter(
+      (workspace) =>
+        workspace.lane === "video_clipping" &&
+        (!needle || workspace.id.toLowerCase().includes(needle) || workspace.name.toLowerCase().includes(needle))
+    );
+  }, [query, workspaces]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    let isMounted = true;
+    setIsLoading(true);
+    apiFetch<WorkspaceRecord[]>("/workspaces?lane=video_clipping")
+      .then((rows) => {
+        if (isMounted) setWorkspaces(rows.filter((workspace) => workspace.lane === "video_clipping"));
+      })
+      .catch(() => {
+        if (isMounted) setWorkspaces([]);
+      })
+      .finally(() => {
+        if (isMounted) setIsLoading(false);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, [isOpen]);
+
+  function chooseWorkspace(nextWorkspaceId: string) {
+    onSelectWorkspace(nextWorkspaceId);
+    setIsOpen(false);
+    setQuery("");
+  }
+
   return (
     <div className="workspace-context">
-      <span>
-        Workspace <strong>{workspaceId}</strong>
-      </span>
-      <Link href="/workspaces">Change</Link>
+      <button className="workspace-switcher-button" type="button" onClick={() => setIsOpen((current) => !current)} aria-expanded={isOpen}>
+        <Search size={15} />
+        <span>Workspace</span>
+        <strong>{workspaceId}</strong>
+      </button>
+      {isOpen ? (
+        <div className="workspace-popover" role="dialog" aria-label="Choose video clipping workspace">
+          <div className="search-field compact">
+            <Search size={16} />
+            <input
+              autoFocus
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search clipping workspaces"
+            />
+          </div>
+          <div className="workspace-result-list">
+            {isLoading ? <div className="empty-state compact-empty">Loading workspaces...</div> : null}
+            {!isLoading && filteredWorkspaces.length ? (
+              filteredWorkspaces.slice(0, 10).map((workspace) => (
+                <button
+                  className={workspace.id === workspaceId ? "workspace-result active" : "workspace-result"}
+                  type="button"
+                  key={workspace.id}
+                  onClick={() => chooseWorkspace(workspace.id)}
+                >
+                  <strong>{workspace.name}</strong>
+                  {workspace.name !== workspace.id ? <small>{workspace.id}</small> : null}
+                </button>
+              ))
+            ) : null}
+            {!isLoading && !filteredWorkspaces.length ? (
+              <div className="empty-state compact-empty">No clipping workspaces found.</div>
+            ) : null}
+          </div>
+          <Link className="workspace-manage-link" href="/workspaces">
+            Manage workspaces
+          </Link>
+        </div>
+      ) : null}
     </div>
   );
 }

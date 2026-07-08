@@ -131,6 +131,8 @@ def render_timeline_mp4(
         ]
     )
     subprocess.run(command, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    if destination.stat().st_size < 4096:
+        raise RuntimeError("ffmpeg produced an empty review cut; check clip timestamps against the source duration")
 
 
 def _ffmpeg_binary() -> str:

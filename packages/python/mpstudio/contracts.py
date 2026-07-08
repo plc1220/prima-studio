@@ -125,6 +125,16 @@ class VideoClippingWorkflowRequest(BaseModel):
     prompt: str = Field(default="", max_length=4000)
 
 
+class VideoClippingRenderSelectionRequest(BaseModel):
+    workspace_id: str = Field(min_length=1, max_length=128)
+    source_asset_id: UUID | None = None
+    highlights: list[dict[str, Any]] = Field(min_length=1)
+    language: str = Field(default="ms-MY", max_length=32)
+    aspect_ratio: AspectRatio = AspectRatio.portrait
+    output_prefix: str = Field(default="outputs/video-clipping", max_length=512)
+    render_mode: Literal["individual", "joined"] = "individual"
+
+
 class ShortsWorkflowRequest(BaseModel):
     workspace_id: str = Field(min_length=1, max_length=128)
     prompt: str = Field(min_length=1, max_length=2000)

@@ -19,23 +19,14 @@ def generate_clip_metadata(
             for item in generated:
                 item.setdefault("source_asset_id", str(asset.id))
                 item.setdefault("source_uri", asset.gcs_uri)
-                item.setdefault("source_filename", asset.gcs_uri)
+                item.setdefault("source_filename", asset.filename)
                 item.setdefault("rank", len(candidates) + 1)
                 candidates.append(item)
             continue
 
-        candidates.append(
-            {
-                "source_asset_id": str(asset.id),
-                "source_uri": asset.gcs_uri,
-                "source_filename": asset.gcs_uri,
-                "timestamp_start_end": "00:00:00 - 00:00:03",
-                "brief_scene_description": f"Candidate social clip from {asset.filename}",
-                "editor_note_clip_rationale": "Fallback candidate selected when Gemini video analysis is unavailable.",
-                "dominant_emotional_tone_impact": "informative, engaging",
-                "trailer_potential_category": "Hook/Opening",
-                "rank": index + 1,
-            }
+        raise RuntimeError(
+            "Gemini video analysis did not return clip candidates. "
+            "Configure GCP/Gemini or rerun with a source Gemini can analyze."
         )
     return candidates
 
@@ -84,8 +75,15 @@ def _generate_gemini_metadata(gcs_uri: str, filename: str, prompt: str, language
             contents=[
                 (
                     "Analyze this video for short-form clip candidates. "
-                    "Return only a JSON array. Each item must include "
+                    "Return only a JSON array with 6 to 10 candidate shorts when the source has enough material. "
+                    "Prefer complete moments that can stand alone as 1 to 5 minute social shorts; "
+                    "shorter clips are acceptable only when the source video itself is short. "
+                    "Each item must include "
                     "timestamp_start_end as HH:MM:SS - HH:MM:SS, "
+                    "using zero-padded hours, minutes, and seconds from this source video's own start time. "
+                    "For example, a clip from 18 seconds to 30 seconds must be written as "
+                    "00:00:18 - 00:00:30, never as 00:18:00 - 00:30:00. "
+                    "Keep every timestamp inside the provided source video duration. "
                     "brief_scene_description, editor_note_clip_rationale, "
                     "dominant_emotional_tone_impact, and trailer_potential_category. "
                     f"Language: {language}. User prompt: {prompt or 'Find the strongest social clips.'}"

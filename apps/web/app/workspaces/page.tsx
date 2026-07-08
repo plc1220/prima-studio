@@ -66,10 +66,37 @@ const laneMeta: Record<
 };
 
 const starterWorkspaces: WorkspaceRecord[] = [
-  { id: "media-prima-newsroom", name: "media-prima-newsroom", lane: "newsroom", created_at: new Date().toISOString() },
-  { id: "media-prima-video-clipping", name: "media-prima-video-clipping", lane: "video_clipping", created_at: new Date().toISOString() },
-  { id: "media-prima-shorts", name: "media-prima-shorts", lane: "shorts", created_at: new Date().toISOString() }
+  { id: "media-prima-newsroom", name: "media-prima-newsroom", lane: "newsroom", created_at: "2026-01-01T00:00:00.000Z" },
+  { id: "media-prima-video-clipping", name: "media-prima-video-clipping", lane: "video_clipping", created_at: "2026-01-01T00:00:00.000Z" },
+  { id: "media-prima-shorts", name: "media-prima-shorts", lane: "shorts", created_at: "2026-01-01T00:00:00.000Z" }
 ];
+
+const dateTimeFormatter = new Intl.DateTimeFormat("en-US", {
+  year: "numeric",
+  month: "short",
+  day: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+  timeZone: "UTC",
+  timeZoneName: "short"
+});
+
+const dateFormatter = new Intl.DateTimeFormat("en-US", {
+  year: "numeric",
+  month: "short",
+  day: "numeric",
+  timeZone: "UTC"
+});
+
+function formatDateTime(value: string) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "Unknown" : dateTimeFormatter.format(date);
+}
+
+function formatDate(value: string) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "Unknown" : dateFormatter.format(date);
+}
 
 export default function WorkspacesPage() {
   const [workspaces, setWorkspaces] = useState<WorkspaceRecord[]>([]);
@@ -367,7 +394,7 @@ function WorkspaceRow({
             <h2>{workspace.id}</h2>
             <span className={meta ? "workspace-tag" : "workspace-tag untagged"}>{meta?.tag || "Untagged"}</span>
           </div>
-          <p className="muted">Created {new Date(workspace.created_at).toLocaleString()}</p>
+          <p className="muted">Created {formatDateTime(workspace.created_at)}</p>
         </div>
       </div>
       <div className="mini-jobs">
@@ -375,7 +402,7 @@ function WorkspaceRow({
           <Link className="mini-job" href={`/jobs/${job.id}`} key={job.id}>
             <span className="mini-job-date">
               <CheckCircle2 size={14} />
-              {new Date(job.created_at).toLocaleDateString()}
+              {formatDate(job.created_at)}
             </span>
             <StatusPill status={job.status} />
           </Link>

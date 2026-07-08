@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import { Film, Layers, Newspaper, WandSparkles } from "lucide-react";
+import { Film, LayoutDashboard, Layers, Newspaper, WandSparkles } from "lucide-react";
 import "@astryxdesign/core/reset.css";
 import "@astryxdesign/theme-neutral/theme.css";
 import "@astryxdesign/core/astryx.css";
@@ -27,6 +27,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             <nav className="nav" aria-label="Primary navigation">
               <Link href="/workspaces">
                 <Layers size={18} /> Workspaces
+              </Link>
+              <Link href="/workbench">
+                <LayoutDashboard size={18} /> Workbench
               </Link>
               <Link href="/newsroom">
                 <Newspaper size={18} /> Newsroom

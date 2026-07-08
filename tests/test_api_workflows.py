@@ -453,6 +453,28 @@ def test_shorts_flow_preserves_newsroom_handoff_script(monkeypatch, tmp_path) ->
 def test_inline_video_clipping_uses_metadata_render_task(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("LIGHT_INLINE_WORKFLOWS", "true")
     app = _fresh_app(monkeypatch, tmp_path)
+    from mpstudio.media import create_demo_mp4
+    import mpstudio.video_clipping
+
+    monkeypatch.setattr(
+        mpstudio.video_clipping,
+        "_generate_gemini_metadata",
+        lambda gcs_uri, filename, prompt, language: [
+            {
+                "source_uri": gcs_uri,
+                "source_filename": filename,
+                "timestamp_start_end": "00:00:01 - 00:00:03",
+                "brief_scene_description": "Usable source excerpt",
+                "editor_note_clip_rationale": "Test candidate",
+                "dominant_emotional_tone_impact": "informative",
+                "trailer_potential_category": "Hook",
+            }
+        ],
+    )
+
+    source_path = tmp_path / "source.mp4"
+    create_demo_mp4(source_path, title="Source footage", duration_seconds=4)
+
     with TestClient(app) as client:
         upload = client.post(
             "/assets/upload-url",
@@ -464,6 +486,9 @@ def test_inline_video_clipping_uses_metadata_render_task(monkeypatch, tmp_path) 
             },
         )
         assert upload.status_code == 200
+        upload_url = urlsplit(upload.json()["upload_url"])
+        stored = client.put(f"{upload_url.path}?{upload_url.query}", content=source_path.read_bytes())
+        assert stored.status_code == 200
 
         response = client.post(
             "/workflows/video-clipping",
@@ -480,4 +505,6 @@ def test_inline_video_clipping_uses_metadata_render_task(monkeypatch, tmp_path) 
         payload = detail.json()
         assert payload["status"] == "succeeded"
         assert any(event["message"] == "Gemini clip metadata generated" for event in payload["events"])
+        completed = next(event for event in payload["events"] if event["step"] == "completed")
+        assert completed["payload"]["metadata"]["render_backend"] == "local_ffmpeg_source"
         assert any(output["kind"] == "final_video" for output in payload["outputs"])

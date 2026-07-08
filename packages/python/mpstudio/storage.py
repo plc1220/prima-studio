@@ -72,6 +72,20 @@ class StorageClient:
                 pass
         self.local_path_for_uri(gcs_uri).write_text(text, encoding="utf-8")
 
+    def write_bytes(self, gcs_uri: str, data: bytes, content_type: str = "application/octet-stream") -> None:
+        if self.settings.gcs_bucket_name:
+            try:
+                from google.cloud import storage
+
+                bucket_name, blob_name = parse_gcs_uri(gcs_uri)
+                storage.Client().bucket(bucket_name).blob(blob_name).upload_from_string(
+                    data, content_type=content_type
+                )
+                return
+            except Exception:
+                pass
+        self.local_path_for_uri(gcs_uri).write_bytes(data)
+
     def read_text(self, gcs_uri: str) -> str:
         if self.settings.gcs_bucket_name:
             try:

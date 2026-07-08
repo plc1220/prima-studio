@@ -2398,7 +2398,7 @@ h2 {
   background: #fff;
   padding: var(--spacing-3, 12px);
   display: grid;
-  grid-template-columns: minmax(178px, auto) minmax(0, 1fr) auto;
+  grid-template-columns: minmax(132px, max-content) minmax(0, 1fr) max-content;
   align-items: start;
   gap: var(--spacing-3, 12px);
 }
@@ -2415,6 +2415,8 @@ h2 {
   color: var(--ink);
   font-weight: 800;
   line-height: 1.25;
+  min-width: 0;
+  white-space: nowrap;
 }
 
 .highlight-check input {
@@ -2426,10 +2428,13 @@ h2 {
   display: grid;
   gap: 5px;
   min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .highlight-copy strong {
   line-height: 1.25;
+  min-width: 0;
 }
 
 .highlight-copy p {
@@ -2441,6 +2446,11 @@ h2 {
 .highlight-copy small {
   color: var(--ink);
   font-weight: 700;
+}
+
+.highlight-card .inline-action {
+  justify-self: end;
+  white-space: nowrap;
 }
 
 .output-summary {
@@ -3967,6 +3977,15 @@ h2 {
   .shorts-output-panel {
     grid-column: 1 / -1;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .highlight-card {
+    grid-template-columns: minmax(126px, max-content) minmax(0, 1fr);
+  }
+
+  .highlight-card .inline-action {
+    grid-column: 2;
+    justify-self: start;
   }
 }
 

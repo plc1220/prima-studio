@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
   ArrowRight,
-  CheckCircle2,
+  AlertTriangle,
   Film,
   FolderSearch,
   Newspaper,
@@ -16,7 +16,6 @@ import {
   WandSparkles
 } from "lucide-react";
 import { apiFetch, type JobRecord, type WorkspaceRecord } from "@/lib/api";
-import { StatusPill } from "@/components/StatusPill";
 
 type LaneId = "newsroom" | "video_clipping" | "shorts";
 
@@ -40,7 +39,7 @@ const laneMeta: Record<
     placeholder: "daily-newsroom",
     empty: "No newsroom packages yet.",
     description: "Generate editorial angles, scripts, scene plans, and handoffs for short-form production.",
-    action: "Open newsroom",
+    action: "Open",
     icon: <Newspaper size={18} />
   },
   video_clipping: {
@@ -50,7 +49,7 @@ const laneMeta: Record<
     placeholder: "campaign-clips",
     empty: "No clipping jobs yet.",
     description: "Sync source footage, split segments, generate metadata, produce clips, and join finals.",
-    action: "Open clipping",
+    action: "Open",
     icon: <Film size={18} />
   },
   shorts: {
@@ -60,7 +59,7 @@ const laneMeta: Record<
     placeholder: "social-shorts",
     empty: "No shorts yet.",
     description: "Turn briefs or approved packages into voiced, subtitled, rendered social videos.",
-    action: "Open shorts",
+    action: "Open",
     icon: <WandSparkles size={18} />
   }
 };
@@ -98,10 +97,15 @@ function formatDate(value: string) {
   return Number.isNaN(date.getTime()) ? "Unknown" : dateFormatter.format(date);
 }
 
+function formatCount(count: number, singular: string, plural = `${singular}s`) {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
+
 export default function WorkspacesPage() {
   const [workspaces, setWorkspaces] = useState<WorkspaceRecord[]>([]);
   const [jobsByWorkspace, setJobsByWorkspace] = useState<Record<string, JobRecord[]>>({});
   const [query, setQuery] = useState("");
+  const [laneFilter, setLaneFilter] = useState<LaneId | "all">("all");
   const [selectedLane, setSelectedLane] = useState<LaneId>("newsroom");
   const [newWorkspaceId, setNewWorkspaceId] = useState("");
   const [showCreate, setShowCreate] = useState(false);
@@ -168,7 +172,6 @@ export default function WorkspacesPage() {
       await apiFetch<{ status: string }>(`/workspaces/${encodeURIComponent(workspaceId)}`, { method: "DELETE" });
       setWorkspaceToDelete(null);
       await refresh();
-      setMessage(`Deleted ${workspaceId}`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unable to delete workspace");
     } finally {
@@ -182,9 +185,11 @@ export default function WorkspacesPage() {
     const needle = query.trim().toLowerCase();
     return rows.filter((workspace) => {
       const tag = workspace.lane ? laneMeta[workspace.lane]?.tag || workspace.lane : "untagged";
-      return !needle || workspace.id.toLowerCase().includes(needle) || tag.toLowerCase().includes(needle);
+      const matchesLane = laneFilter === "all" || workspace.lane === laneFilter;
+      const matchesQuery = !needle || workspace.id.toLowerCase().includes(needle) || tag.toLowerCase().includes(needle);
+      return matchesLane && matchesQuery;
     });
-  }, [query, rows]);
+  }, [laneFilter, query, rows]);
 
   const laneSummaries = useMemo(
     () =>
@@ -274,7 +279,20 @@ export default function WorkspacesPage() {
 
       <section className="lane-summary-grid" aria-label="Production lanes">
         {laneSummaries.map((lane) => (
-          <article className="lane-summary-card" key={lane.id}>
+          <article
+            className={laneFilter === lane.id ? "lane-summary-card active" : "lane-summary-card"}
+            key={lane.id}
+            role="button"
+            tabIndex={0}
+            aria-pressed={laneFilter === lane.id}
+            onClick={() => setLaneFilter((current) => (current === lane.id ? "all" : lane.id))}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                setLaneFilter((current) => (current === lane.id ? "all" : lane.id));
+              }
+            }}
+          >
             <div className="lane-summary-heading">
               <span className="icon-box">{lane.icon}</span>
               <div>
@@ -285,14 +303,18 @@ export default function WorkspacesPage() {
             <div className="lane-summary-metrics">
               <span>
                 <FolderSearch size={15} />
-                {lane.workspaceCount} workspaces
+                {formatCount(lane.workspaceCount, "workspace")}
               </span>
               <span>
                 <TimerReset size={15} />
-                {lane.jobCount} recent jobs
+                {formatCount(lane.jobCount, "recent job")}
               </span>
             </div>
-            <Link className="button secondary lane-summary-action" href={`${lane.href}?workspace=${encodeURIComponent(lane.primaryWorkspace || "")}`}>
+            <Link
+              className="button secondary lane-summary-action"
+              href={`${lane.href}?workspace=${encodeURIComponent(lane.primaryWorkspace || "")}`}
+              onClick={(event) => event.stopPropagation()}
+            >
               {lane.action} <ArrowRight size={16} />
             </Link>
           </article>
@@ -304,12 +326,19 @@ export default function WorkspacesPage() {
           <Search size={18} />
           <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search workspaces or tags" />
         </div>
-        <span className="muted">
-          Showing {filteredWorkspaces.length} of {rows.length}
-        </span>
+        <div className="workspace-toolbar-meta">
+          {laneFilter !== "all" ? (
+            <button className="filter-clear" type="button" onClick={() => setLaneFilter("all")}>
+              {laneMeta[laneFilter].tag} filter
+            </button>
+          ) : null}
+          <span className="muted">
+            Showing {filteredWorkspaces.length} of {rows.length}
+          </span>
+        </div>
       </section>
 
-      {message ? <p className="muted code">{message}</p> : null}
+      {message ? <p className="workspace-alert">{message}</p> : null}
 
       <section className="workspace-list">
         {filteredWorkspaces.length ? (
@@ -382,9 +411,11 @@ function WorkspaceRow({
 }) {
   const lane = workspace.lane && laneMeta[workspace.lane] ? workspace.lane : null;
   const meta = lane ? laneMeta[lane] : null;
+  const latestJob = jobs[0];
+  const latestFailed = latestJob?.status === "failed";
 
   return (
-    <article className="workspace-row tagged-workspace-row">
+    <article className={latestFailed ? "workspace-row tagged-workspace-row has-failed-job" : "workspace-row tagged-workspace-row"}>
       <div className="workspace-main">
         <div className="icon-box">
           {meta?.icon || <FolderSearch size={18} />}
@@ -398,15 +429,24 @@ function WorkspaceRow({
         </div>
       </div>
       <div className="mini-jobs">
-        {jobs.map((job) => (
-          <Link className="mini-job" href={`/jobs/${job.id}`} key={job.id}>
-            <span className="mini-job-date">
-              <CheckCircle2 size={14} />
-              {formatDate(job.created_at)}
-            </span>
-            <StatusPill status={job.status} />
-          </Link>
-        ))}
+        {latestFailed ? (
+          <span className="latest-failure">
+            <AlertTriangle size={15} />
+            Latest job failed
+          </span>
+        ) : null}
+        {jobs.length ? (
+          <div className="job-dot-strip" aria-label={`Recent jobs for ${workspace.id}`}>
+            {jobs.map((job) => {
+              const label = `${job.status} job from ${formatDate(job.created_at)}`;
+              return (
+                <Link className={`job-dot ${job.status}`} href={`/jobs/${job.id}`} aria-label={label} title={label} key={job.id}>
+                  <span aria-hidden="true" />
+                </Link>
+              );
+            })}
+          </div>
+        ) : null}
         {!jobs.length ? <span className="muted">{meta?.empty || "No tagged jobs yet."}</span> : null}
       </div>
       <div className="actions">

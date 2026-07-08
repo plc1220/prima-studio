@@ -8,7 +8,6 @@ import {
   CheckCircle2,
   Download,
   FileVideo,
-  FileText,
   PlayCircle,
   RefreshCw,
   Search,
@@ -49,9 +48,6 @@ export function VideoClippingForm() {
   const params = useSearchParams();
   const sourceVideoRef = useRef<HTMLVideoElement>(null);
   const previewEndTimeRef = useRef<number | null>(null);
-  const filenameInputRef = useRef<HTMLInputElement>(null);
-  const keepFilenameFocusRef = useRef(false);
-  const filenameSelectionRef = useRef({ start: 0, end: 0 });
   const [workspaceId, setWorkspaceId] = useState(params.get("workspace") || defaultWorkspaceId);
   const [assetQuery, setAssetQuery] = useState("");
   const [assets, setAssets] = useState<AssetRecord[]>([]);
@@ -69,6 +65,7 @@ export function VideoClippingForm() {
   const [outputPrefix, setOutputPrefix] = useState("outputs/video-clipping");
   const [prompt, setPrompt] = useState("Create a social cut suitable for Media Prima digital audiences.");
   const [busy, setBusy] = useState(false);
+  const [uploadingSource, setUploadingSource] = useState(false);
   const [deletingAssetId, setDeletingAssetId] = useState("");
   const [deletingSourceId, setDeletingSourceId] = useState("");
   const [message, setMessage] = useState("");
@@ -111,19 +108,6 @@ export function VideoClippingForm() {
     refreshWorkspace();
   }, []);
 
-  useEffect(() => {
-    if (!keepFilenameFocusRef.current) return;
-    const handle = window.requestAnimationFrame(() => {
-      const input = filenameInputRef.current;
-      if (!input || document.activeElement === input) return;
-      input.focus();
-      const start = Math.min(filenameSelectionRef.current.start, input.value.length);
-      const end = Math.min(filenameSelectionRef.current.end, input.value.length);
-      input.setSelectionRange(start, end);
-    });
-    return () => window.cancelAnimationFrame(handle);
-  }, [filename]);
-
   const assetsByKind = useMemo(() => {
     return assets.reduce<Record<string, AssetRecord[]>>((groups, asset) => {
       groups[asset.kind] = [...(groups[asset.kind] || []), asset];
@@ -151,7 +135,7 @@ export function VideoClippingForm() {
   }, [sourceAssets, assetQuery]);
 
   async function registerOrUploadAsset() {
-    setBusy(true);
+    setUploadingSource(true);
     setMessage("");
     try {
       const selectedWorkspace = await ensureSelectedWorkspace();
@@ -179,9 +163,9 @@ export function VideoClippingForm() {
       await refreshWorkspace(selectedWorkspace);
       setMessage(file ? `Uploaded ${uploadFilename}.` : `Registered source asset ${response.asset_id}.`);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Failed to register asset");
+      setMessage(error instanceof Error ? error.message : "Failed to upload source");
     } finally {
-      setBusy(false);
+      setUploadingSource(false);
     }
   }
 
@@ -473,9 +457,6 @@ export function VideoClippingForm() {
           <button className="icon-button" onClick={() => refreshWorkspace()} aria-label="Refresh workspace" title="Refresh workspace">
             <RefreshCw size={18} />
           </button>
-          <button className="button" type="button" onClick={startWorkflow} disabled={busy || !workflowReady}>
-            <WandSparkles size={16} /> Find candidate shorts
-          </button>
         </div>
       </section>
 
@@ -528,12 +509,18 @@ export function VideoClippingForm() {
               ) : null}
 
               <div className={selectedAsset ? "upload-drop compact-upload source-change-drop" : "upload-drop editorial-upload compact-upload"}>
-                <UploadCloud size={selectedAsset ? 18 : 24} />
-                <strong>{file ? file.name : selectedAsset ? "Change source file" : "Upload episode video"}</strong>
+                {uploadingSource ? <span className="loading-spinner" aria-hidden="true" /> : <UploadCloud size={selectedAsset ? 18 : 24} />}
+                <strong>{selectedAsset ? "Replace source" : "Upload source video"}</strong>
+                <span className="upload-filename">{uploadingSource ? `Uploading ${file?.name || "source"}...` : file ? file.name : "No file chosen"}</span>
+                <label className={uploadingSource ? "button secondary file-picker-button disabled" : "button secondary file-picker-button"} htmlFor="file">
+                  Choose file
+                </label>
                 <input
                   id="file"
+                  className="native-file-input"
                   type="file"
                   accept="video/*"
+                  disabled={uploadingSource}
                   onChange={(event) => {
                     const selected = event.target.files?.[0] || null;
                     setFile(selected);
@@ -543,8 +530,9 @@ export function VideoClippingForm() {
               </div>
 
               {file ? (
-                <button className="button secondary" type="button" onClick={registerOrUploadAsset} disabled={busy}>
-                  <UploadCloud size={16} /> Upload source
+                <button className="button secondary" type="button" onClick={registerOrUploadAsset} disabled={uploadingSource}>
+                  {uploadingSource ? <span className="loading-spinner small" aria-hidden="true" /> : <UploadCloud size={16} />}
+                  {uploadingSource ? "Uploading..." : "Upload source"}
                 </button>
               ) : null}
 
@@ -585,45 +573,6 @@ export function VideoClippingForm() {
                   </div>
                 </details>
               ) : null}
-
-              <details className="technical-details source-library">
-                <summary>Register existing file</summary>
-                <div className="field">
-                  <label htmlFor="filename">Source filename</label>
-                  <input
-                    ref={filenameInputRef}
-                    id="filename"
-                    value={filename}
-                    onFocus={(event) => {
-                      keepFilenameFocusRef.current = true;
-                      filenameSelectionRef.current = {
-                        start: event.currentTarget.selectionStart ?? event.currentTarget.value.length,
-                        end: event.currentTarget.selectionEnd ?? event.currentTarget.value.length,
-                      };
-                    }}
-                    onBlur={(event) => {
-                      if (event.relatedTarget) keepFilenameFocusRef.current = false;
-                    }}
-                    onChange={(event) => {
-                      keepFilenameFocusRef.current = true;
-                      filenameSelectionRef.current = {
-                        start: event.currentTarget.selectionStart ?? event.currentTarget.value.length,
-                        end: event.currentTarget.selectionEnd ?? event.currentTarget.value.length,
-                      };
-                      setFilename(event.target.value);
-                    }}
-                    onKeyUp={(event) => {
-                      filenameSelectionRef.current = {
-                        start: event.currentTarget.selectionStart ?? event.currentTarget.value.length,
-                        end: event.currentTarget.selectionEnd ?? event.currentTarget.value.length,
-                      };
-                    }}
-                  />
-                </div>
-                <button className="button secondary" type="button" onClick={registerOrUploadAsset} disabled={busy || !filename}>
-                  <UploadCloud size={16} /> Register source
-                </button>
-              </details>
             </div>
           </section>
           ) : null}
@@ -709,43 +658,11 @@ export function VideoClippingForm() {
               </div>
             )}
 
-            {latestMetadata ? (
-              <details className="technical-details">
-                <summary>Technical analysis file</summary>
-                <div className="output-summary inline-output-summary">
-                  <FileText size={18} />
-                  <span>
-                    <strong>{highlightCandidates.length || "Scene"} candidate{highlightCandidates.length === 1 ? "" : "s"} parsed from Gemini</strong>
-                    <small>{shortStoragePath(latestMetadata.gcs_uri, latestMetadata)}</small>
-                  </span>
-                  {downloadUrls[latestMetadata.id] ? (
-                    <Link className="button secondary inline-action" href={downloadUrls[latestMetadata.id]} target="_blank">
-                      <Download size={16} /> Open JSON
-                    </Link>
-                  ) : null}
-                </div>
-                {metadataJson ? (
-                  <pre className="metadata-json-preview">{metadataJson}</pre>
-                ) : null}
-              </details>
-            ) : null}
-
             <details className="technical-details">
-              <summary>Advanced job settings</summary>
+              <summary>Additional notes</summary>
               <div className="field">
-                <label htmlFor="language">Language</label>
-                <select id="language" value={language} onChange={(event) => setLanguage(event.target.value)}>
-                  <option value="ms-MY">Malay</option>
-                  <option value="en-MY">English</option>
-                </select>
-              </div>
-              <div className="field">
-                <label htmlFor="metadata-prompt">Analysis prompt</label>
+                <label htmlFor="metadata-prompt">Notes for finding candidates</label>
                 <textarea id="metadata-prompt" value={prompt} onChange={(event) => setPrompt(event.target.value)} />
-              </div>
-              <div className="field">
-                <label htmlFor="metadata-output-prefix">Output prefix</label>
-                <input id="metadata-output-prefix" value={outputPrefix} onChange={(event) => setOutputPrefix(event.target.value)} />
               </div>
             </details>
             {message ? <p className="muted code">{message}</p> : null}
@@ -816,12 +733,7 @@ export function VideoClippingForm() {
                 ) : null}
               </>
             ) : (
-              <>
-                <div className="empty-state compact-empty">Select candidate shorts and export them here.</div>
-                <button className="button" type="button" onClick={startWorkflow} disabled={busy || !workflowReady}>
-                  <Video size={16} /> Find candidate shorts
-                </button>
-              </>
+              <div className="empty-state compact-empty">Select candidate shorts and export them here.</div>
             )}
             {latestJob ? (
               <button className="button secondary" type="button" onClick={() => toggleJobDetail(latestJob.id)}>

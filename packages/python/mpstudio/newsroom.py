@@ -2,8 +2,6 @@ import re
 from datetime import datetime, timezone
 from uuid import UUID
 
-import requests
-
 from .contracts import (
     AspectRatio,
     NewsroomAngle,
@@ -14,6 +12,7 @@ from .contracts import (
     NewsroomShortsHandoff,
     NewsroomTopicCard,
 )
+from .research import collect_newsroom_evidence
 from .settings import get_settings
 
 
@@ -293,40 +292,7 @@ def _build_narrative_package(
 
 
 def _collect_live_evidence(brief: str) -> list[NewsroomEvidence]:
-    settings = get_settings()
-    if not settings.newsroom_live_signals:
-        return []
-    try:
-        response = requests.get(
-            "https://api.gdeltproject.org/api/v2/doc/doc",
-            params={
-                "query": brief,
-                "mode": "artlist",
-                "format": "json",
-                "maxrecords": 8,
-                "sort": "hybridrel",
-            },
-            timeout=settings.newsroom_signal_timeout_seconds,
-        )
-        response.raise_for_status()
-        articles = response.json().get("articles", [])
-    except Exception:
-        return []
-    evidence: list[NewsroomEvidence] = []
-    for index, article in enumerate(articles[:8]):
-        title = str(article.get("title") or "").strip()
-        if not title:
-            continue
-        evidence.append(
-            NewsroomEvidence(
-                source=str(article.get("domain") or "GDELT"),
-                signal=_shorten(title, 500),
-                url=str(article.get("url") or "") or None,
-                freshness=str(article.get("seendate") or "recent"),
-                strength=max(55, 92 - index * 4),
-            )
-        )
-    return evidence
+    return collect_newsroom_evidence(brief, settings=get_settings())
 
 
 def _evidence_for_card(

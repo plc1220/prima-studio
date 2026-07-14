@@ -191,6 +191,7 @@ class NewsroomEvidence(BaseModel):
     url: str | None = Field(default=None, max_length=1000)
     freshness: str = Field(default="current", max_length=64)
     strength: int = Field(default=70, ge=0, le=100)
+    evidence_kind: str = Field(default="reported", max_length=32)
 
 
 class NewsroomAngle(BaseModel):

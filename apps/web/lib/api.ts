@@ -84,6 +84,7 @@ export type NewsroomEvidence = {
   url?: string | null;
   freshness: string;
   strength: number;
+  evidence_kind: string;
 };
 
 export type NewsroomAngle = {

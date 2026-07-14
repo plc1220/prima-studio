@@ -39,6 +39,11 @@ class Settings(BaseSettings):
     light_inline_workflows: bool = False
     newsroom_live_signals: bool = False
     newsroom_signal_timeout_seconds: float = 5.0
+    newsroom_research_channels: str = "gdelt,exa,rss,x,xiaohongshu"
+    newsroom_research_max_results: int = 12
+    newsroom_social_max_results: int = 6
+    newsroom_command_timeout_seconds: float = 15.0
+    newsroom_rss_feeds: str = ""
 
 
 @lru_cache

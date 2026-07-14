@@ -12,6 +12,7 @@ dependencies = [
   "google-cloud-texttospeech>=2.16,<3",
   "google-cloud-video-transcoder>=1.13,<2",
   "requests>=2.31,<3",
+  "PyYAML>=6.0,<7",
   "imageio-ffmpeg>=0.5,<1",
 ]
 

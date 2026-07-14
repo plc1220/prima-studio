@@ -513,7 +513,10 @@ export function NewsroomGenerator() {
                   <div className="evidence-list">
                     {card.evidence.slice(0, 3).map((item) => (
                       <div key={`${card.id}-${item.source}-${item.signal}`}>
-                        <strong>{item.source}</strong>
+                        <strong>
+                          {item.source}
+                          {item.evidence_kind === "social_signal" ? " · social signal" : ""}
+                        </strong>
                         <span>{item.signal}</span>
                       </div>
                     ))}

@@ -17,7 +17,29 @@ Product scaffold for a local-first AI video workflow demo that can still grow in
 
 ## Local Demo Deployment
 
-For the Media Prima demo, local deployment is the fastest path. Docker Compose builds once, reuses local image layers on later runs, stores job state in SQLite, and writes artifacts under `./local-data`.
+For the Media Prima demo, local deployment is the fastest path. Docker Compose builds once, reuses local image layers on later runs, stores job state in SQLite, and runs the API plus all workflow workers.
+
+Real Video Clipping still uses the cloud bucket in local mode. Gemini/Vertex receives `types.Part.from_uri(...)` with the uploaded source video URI, so the source must be in a real GCS bucket such as `gs://mp-ai-video-clipping-local-test/...`; `gs://local-bucket/...` is only a local smoke-test path and Gemini cannot read it.
+
+Before starting Compose:
+
+```bash
+cp .env.example .env
+gcloud auth application-default login
+gcloud config set project mp-ai-video
+```
+
+Set these values in `.env`:
+
+```bash
+GCP_PROJECT_ID=mp-ai-video
+GOOGLE_CLOUD_PROJECT=mp-ai-video
+GCP_REGION=asia-southeast1
+GCS_BUCKET_NAME=mp-ai-video-clipping-local-test
+VIDEO_CLIPPING_BUCKET_NAME=mp-ai-video-clipping-local-test
+NEXT_PUBLIC_GCS_BUCKET_NAME=mp-ai-video-clipping-local-test
+GEMINI_MODEL_NAME=gemini-2.5-flash
+```
 
 ```bash
 docker compose up --build
@@ -42,7 +64,8 @@ Generated assets are visible in the UI:
 - Newsroom packages: open the Newsroom Generator page and select a package, topic card, and angle.
 - Video Clipping outputs: open a job from the Video Clipping page or `/jobs/{job_id}`.
 - Generated shorts: open the Shorts page and check the `Generated shorts` section.
-- Local files: `./local-data/storage/<workspace>/outputs/...`
+- Cloud bucket files: `gs://<GCS_BUCKET_NAME>/<workspace>/outputs/...`.
+- Local files under `./local-data/storage/...` only appear when a service cannot use GCS or when GCS env vars are intentionally blank.
 
 Prima Studio shorts are not limited to generated-video models. The flow plans a script, asks Gemini for stock-video search terms, searches the configured stock provider, downloads selected clips, builds a timeline, and renders the MP4. Set `PEXELS_API_KEYS` or `PIXABAY_API_KEYS` plus `STOCK_VIDEO_SOURCE=pexels` or `pixabay` to enable real stock search; without keys, the local demo falls back to a generated placeholder MP4 so the render/review flow still works. The Shorts Generator also exposes MoneyPrinter-style controls for script overrides, keywords, source selection, dubbing, subtitle burn-in, and Veo generation. Dubbing uses Google Cloud Text-to-Speech through ADC or Workload Identity. Use `video_source=veo3` or `veo3_fast` with `GCP_PROJECT_ID`, `GCP_REGION`, and the `VEO_MODEL_NAME` / `VEO_FAST_MODEL_NAME` settings to attempt Vertex AI Veo output before render assembly. The defaults use Google's current Veo 3.1 model IDs because Veo 3.0 endpoints are scheduled for migration.
 
@@ -56,17 +79,19 @@ Workers poll the local queue every 8 seconds by default through `TASK_POLL_INTER
 
 ## Local Development
 
-The local stack uses SQLite and local filesystem storage by default, so it can run without GCP credentials.
+The local stack uses SQLite for jobs and tasks, but real video clipping should still use the cloud bucket and GCP credentials. Running without `GCS_BUCKET_NAME` is useful only for API/UI smoke tests because Gemini cannot analyze source videos stored in local `gs://` emulation.
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
 pip install -e "packages/python[dev]"
 pip install -r services/api/requirements.txt
+cp .env.example .env
+gcloud auth application-default login
 pytest
 ```
 
-Run API and workers in separate terminals:
+Run the API and every worker in separate terminals. The worker processes are the local equivalent of the deployed workflow functions; without them jobs remain queued and the UI will keep showing the last completed output.
 
 ```bash
 uvicorn services.api.app.main:app --reload --port 8080

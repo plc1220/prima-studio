@@ -72,6 +72,7 @@ export function VideoClippingForm() {
   const [highlightsMessage, setHighlightsMessage] = useState("");
   const [highlightCandidates, setHighlightCandidates] = useState<HighlightCandidate[]>([]);
   const [selectedHighlightIds, setSelectedHighlightIds] = useState<string[]>([]);
+  const [activePreviewCandidateId, setActivePreviewCandidateId] = useState("");
   const [metadataJson, setMetadataJson] = useState("");
   const [sourceDrawerOpen, setSourceDrawerOpen] = useState(true);
   const [expandedJobId, setExpandedJobId] = useState("");
@@ -120,7 +121,6 @@ export function VideoClippingForm() {
   const clipAssets = assetsByKind.clip || [];
   const finalVideoAssets = [...(assetsByKind.final_video || [])].sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
   const selectedAsset = sourceAssets.find((asset) => asset.id === assetId);
-  const latestJob = jobs[0];
   const workflowReady = Boolean(assetId);
   const latestFinalVideo = finalVideoAssets[0];
   const latestFinalVideoUrl = latestFinalVideo ? downloadUrls[latestFinalVideo.id] : "";
@@ -205,17 +205,22 @@ export function VideoClippingForm() {
         video.pause();
         video.currentTime = endTime;
         previewEndTimeRef.current = null;
+        setActivePreviewCandidateId("");
       }
+    }
+
+    function clearCandidatePreview() {
+      previewEndTimeRef.current = null;
+      setActivePreviewCandidateId("");
     }
 
     video.addEventListener("timeupdate", stopAtCandidateEnd);
     video.addEventListener("seeking", stopAtCandidateEnd);
-    video.addEventListener("ended", () => {
-      previewEndTimeRef.current = null;
-    });
+    video.addEventListener("ended", clearCandidatePreview);
     return () => {
       video.removeEventListener("timeupdate", stopAtCandidateEnd);
       video.removeEventListener("seeking", stopAtCandidateEnd);
+      video.removeEventListener("ended", clearCandidatePreview);
     };
   }, [previewUrl]);
 
@@ -249,6 +254,7 @@ export function VideoClippingForm() {
     setHighlightsMessage("");
     setHighlightCandidates([]);
     setSelectedHighlightIds([]);
+    setActivePreviewCandidateId("");
     setMetadataJson("");
     if (!latestMetadata || !downloadUrls[latestMetadata.id]) return;
 
@@ -344,13 +350,28 @@ export function VideoClippingForm() {
 
   function previewHighlight(candidate: HighlightCandidate) {
     const video = sourceVideoRef.current;
-    if (!video) {
+    if (!video || !previewUrl) {
       setMessage("Select or upload the source video to preview this highlight.");
       return;
     }
+    setMessage("");
+    setActivePreviewCandidateId(candidate.id);
     previewEndTimeRef.current = candidate.endSeconds;
-    video.currentTime = candidate.startSeconds;
-    video.play().catch(() => undefined);
+
+    const playRange = () => {
+      video.currentTime = candidate.startSeconds;
+      video.play().catch(() => {
+        setMessage("Preview could not autoplay. Press play on the source review video to continue this candidate range.");
+      });
+    };
+
+    if (video.readyState < HTMLMediaElement.HAVE_METADATA) {
+      video.addEventListener("loadedmetadata", playRange, { once: true });
+      video.load();
+      return;
+    }
+
+    playRange();
   }
 
   function toggleHighlight(candidateId: string) {
@@ -370,6 +391,7 @@ export function VideoClippingForm() {
     setDownloadUrls({});
     setHighlightCandidates([]);
     setSelectedHighlightIds([]);
+    setActivePreviewCandidateId("");
     setMetadataJson("");
     setMessage("");
     window.history.replaceState(null, "", `/video-clipping?workspace=${encodeURIComponent(nextWorkspace)}`);
@@ -581,7 +603,7 @@ export function VideoClippingForm() {
         <main className="clipping-review-panel">
           <div className="review-surface-header">
             <div>
-              <div className="eyebrow">Review Source</div>
+              <div className="eyebrow">{activePreviewCandidateId ? "Preview Candidate" : "Review Source"}</div>
               <h2>{selectedAsset ? assetDisplayName(selectedAsset) : "Select footage to begin"}</h2>
             </div>
             <span className="review-badge">{aspectRatio}</span>
@@ -620,13 +642,39 @@ export function VideoClippingForm() {
                 <button className="button primary-cta" type="button" onClick={startWorkflow} disabled={busy || !workflowReady}>
                   <WandSparkles size={16} /> Find candidate shorts
                 </button>
+                <button className="button" type="button" onClick={exportSelectedHighlights} disabled={busy || !selectedHighlights.length}>
+                  <Video size={16} /> {exportMode === "joined" ? "Export stitched short" : "Export selected shorts"}
+                </button>
               </div>
             </div>
+
+            {activePreviewCandidateId ? (
+              <div className="candidate-preview-status" aria-live="polite">
+                {(() => {
+                  const candidate = highlightCandidates.find((item) => item.id === activePreviewCandidateId);
+                  return candidate ? (
+                    <>
+                      <PlayCircle size={16} />
+                      <span>
+                        Previewing <strong>{candidate.range}</strong> from {candidate.title}
+                      </span>
+                    </>
+                  ) : null;
+                })()}
+              </div>
+            ) : null}
 
             {highlightCandidates.length ? (
               <div className="highlight-list">
                 {highlightCandidates.map((candidate) => (
-                  <article className={selectedHighlightIds.includes(candidate.id) ? "highlight-card selected" : "highlight-card"} key={candidate.id}>
+                  <article
+                    className={[
+                      "highlight-card",
+                      selectedHighlightIds.includes(candidate.id) ? "selected" : "",
+                      activePreviewCandidateId === candidate.id ? "previewing" : "",
+                    ].filter(Boolean).join(" ")}
+                    key={candidate.id}
+                  >
                     <label className="highlight-check">
                       <input
                         type="checkbox"
@@ -647,7 +695,7 @@ export function VideoClippingForm() {
                       disabled={!previewUrl || !selectedAsset}
                       title={previewUrl && selectedAsset ? "Preview this moment in the source video" : "Select or upload the source video to preview"}
                     >
-                      <PlayCircle size={16} /> Preview
+                      <PlayCircle size={16} /> {activePreviewCandidateId === candidate.id ? "Playing" : "Preview"}
                     </button>
                   </article>
                 ))}
@@ -670,8 +718,8 @@ export function VideoClippingForm() {
         </main>
 
         <aside className="clipping-output-panel" aria-label="Clip review and export">
-          <Panel title="Short Outputs">
-            <p className="muted panel-note">Only exported MP4s appear here. Candidate suggestions stay under the source review until you export them.</p>
+          <Panel title="Export Settings">
+            <p className="muted panel-note">These settings apply when exporting selected candidates from the source review.</p>
             <div className="field">
               <label htmlFor="aspect">Export shape</label>
               <select id="aspect" value={aspectRatio} onChange={(event) => setAspectRatio(event.target.value)}>
@@ -687,9 +735,10 @@ export function VideoClippingForm() {
                 <option value="joined">One stitched MP4 from selected candidates</option>
               </select>
             </div>
-            <button className="button" type="button" onClick={exportSelectedHighlights} disabled={busy || !selectedHighlights.length}>
-              <Video size={16} /> {exportMode === "joined" ? "Export stitched short" : "Export selected shorts"}
-            </button>
+            <div className="panel-subheading">
+              <strong>Short Outputs</strong>
+              <span>Only exported MP4s appear here.</span>
+            </div>
             {latestFinalVideo ? (
               <>
                 {latestFinalVideoUrl ? (
@@ -735,11 +784,6 @@ export function VideoClippingForm() {
             ) : (
               <div className="empty-state compact-empty">Select candidate shorts and export them here.</div>
             )}
-            {latestJob ? (
-              <button className="button secondary" type="button" onClick={() => toggleJobDetail(latestJob.id)}>
-                Inspect latest job
-              </button>
-            ) : null}
           </Panel>
         </aside>
       </section>

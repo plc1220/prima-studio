@@ -22,3 +22,12 @@ external/
 sample/*.mp4
 
 .gstack/
+
+# Local Graphify state and browser QA captures.
+browser-screenshots/
+graphify-out/.graphify_chunk_*.json
+graphify-out/.graphify_transcripts.json
+graphify-out/cache/
+graphify-out/chunks/
+.graphify_python
+graphify-out/.graphify_python
